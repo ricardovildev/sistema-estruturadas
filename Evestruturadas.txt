@@ -1,0 +1,63 @@
+import streamlit as st
+from importacao import (
+    importar_notas_atualizado,
+    importar_historico_precos,
+    importar_proventos,
+    importar_ativos,
+    calcular_resultado_opcoes,
+    importar_vencimentos_opcoes,
+    atualizar_historico_operacoes
+)
+
+st.set_page_config(page_title="Importações Estruturadas", layout="centered")
+
+st.title("Importações Estruturadas")
+st.markdown("Use os botões abaixo para executar cada etapa do processo de importação e cálculo.")
+
+# Botão 1
+if st.button("Importar Notas de Corretagem"):
+    importar_notas_atualizado()
+    st.success("Notas de corretagem importadas com sucesso.")
+
+# Botão 2
+if st.button("Importar Histórico de Preços"):
+    importar_historico_precos()
+    st.success("Histórico de preços importado com sucesso.")
+
+# Botão 3
+if st.button("Importar Proventos"):
+    importar_proventos()
+    st.success("Proventos importados com sucesso.")
+
+# Botão 4
+if st.button("Importar ativos"):
+    importar_ativos()
+    st.success("Ativos importadados com sucesso.")
+
+# Botão 5
+if st.button("Calcular Resultado das Opções"):
+    calcular_resultado_opcoes()
+    st.success("Resultado das opções calculado com sucesso.")
+
+# Botão 6
+#if st.button("Atualizar Posição Consolidada"):
+   # atualizar_posicao_consolidada()
+   # st.success("Posição consolidada atualizada com sucesso.")
+
+#Botão 7
+if st.button("Importar Vencimento das Opções"):
+    importar_vencimentos_opcoes()
+    st.success("Vencimentos importados com sucesso.")
+
+#Botão 8
+
+
+st.title("Atualizar Histórico de Operações")
+
+if st.button("Atualizar histórico"):
+    try:
+        atualizar_historico_operacoes()  # executa a função, mas não exibe o resultado
+        st.success("✅ Histórico atualizado com sucesso!")
+    except Exception as e:
+        st.error(f"❌ Erro ao atualizar: {e}")
+
