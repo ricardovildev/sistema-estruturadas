@@ -1,0 +1,173 @@
+def atualizar_historico_operacoes():
+    import pandas as pd
+    from sqlalchemy import text
+    from backend.conexao import conectar  # importa a função conectar
+
+    engine = conectar()
+
+    # ------------------------------
+    # Leitura das tabelas
+    # ------------------------------
+    query_notas = "SELECT * FROM notas"
+    query_precos = "SELECT * FROM historico_precos"
+    query_proventos = "SELECT * FROM proventos"
+
+    notas = pd.read_sql(query_notas, engine)
+    precos = pd.read_sql(query_precos, engine)
+    prov = pd.read_sql(query_proventos, engine)
+
+    # Garantir formatação de datas
+    notas['data_registro'] = pd.to_datetime(notas['data_registro'], errors='coerce')
+    precos['data_pregao'] = pd.to_datetime(precos['data_pregao'], errors='coerce')
+    prov['data_com'] = pd.to_datetime(prov['data_com'], errors='coerce')
+
+    # ------------------------------
+    # Limpar tabela historico_operacoes
+    # ------------------------------
+    with engine.begin() as conn:
+        conn.execute(text("DELETE FROM historico_operacoes"))
+
+    # ------------------------------
+    # Separar ações e opções
+    # ------------------------------
+    acoes = notas[notas['tipo_papel'] == 'ACAO']
+    opcoes = notas[notas['tipo_papel'] == 'OPCAO']
+
+    # ------------------------------
+    # Quantidade comprada e vendida de ações
+    # ------------------------------
+    compras = acoes[acoes['tipo_lado'] == 'C'].groupby(['conta', 'cliente', 'ativo_base']).agg(
+        Quantidade_comprada=('quantidade', 'sum'),
+        Total_compras=('valor_operacao', 'sum'),
+        data_inicio=('data_registro', 'min')
+    ).reset_index()
+
+    # Função para divisão segura
+    def safe_div(num, den):
+        return num / den if den != 0 else 0
+
+    # Calculando preço médio
+    compras['preco_medio'] = compras.apply(
+    lambda x: safe_div(x['Total_compras'], x['Quantidade_comprada']), axis=1
+    )
+
+    vendas = acoes[acoes['tipo_lado'] == 'V'].groupby(['conta', 'cliente', 'ativo_base']).agg(
+        Quantidade_vendida=('quantidade', 'sum'),
+        Total_vendas=('valor_operacao', 'sum')
+    ).reset_index()
+
+    # ------------------------------
+    # Prêmios de opções
+    # ------------------------------
+    premios_recebidos = opcoes[opcoes['tipo_lado'] == 'V'].groupby(['conta', 'cliente', 'ativo_base']).agg(
+        Premios_recebidos=('valor_operacao', 'sum')
+    ).reset_index()
+
+    premios_pagos = opcoes[opcoes['tipo_lado'] == 'C'].groupby(['conta', 'cliente', 'ativo_base']).agg(
+        Premios_pagos=('valor_operacao', 'sum')
+    ).reset_index()
+
+    # ------------------------------
+    # Consolidar posição (ações + clientes só de opções)
+    # ------------------------------
+    consolidado = pd.merge(compras, vendas, on=['conta', 'cliente', 'ativo_base'], how='outer')
+    consolidado = pd.merge(consolidado, premios_recebidos, on=['conta', 'cliente', 'ativo_base'], how='outer')
+    consolidado = pd.merge(consolidado, premios_pagos, on=['conta', 'cliente', 'ativo_base'], how='outer')
+
+    consolidado.fillna(0, inplace=True)
+
+    # Quantidade atual e prêmio líquido
+    consolidado['quantidade_atual'] = consolidado['Quantidade_comprada'] - consolidado['Quantidade_vendida']
+    consolidado['Premio_liquido'] = consolidado['Premios_recebidos'] - consolidado['Premios_pagos']
+
+    # ------------------------------
+    # Proventos por ativo e cliente (considerando histórico de compras)
+    # ------------------------------
+    proventos_total = []
+
+    for _, row in consolidado.iterrows():
+        conta = row['conta']
+        cliente = row['cliente']
+        ativo = row['ativo_base']
+    
+        # Seleciona todos os proventos desse ativo
+        prov_ativo = prov[prov['ativo'] == ativo].copy()
+        total_provento = 0
+    
+        for _, prov_row in prov_ativo.iterrows():
+            data_com = prov_row['data_com']
+        
+            # Quantidade de ações do cliente até a data do provento
+            compras_anteriores = acoes[
+                (acoes['conta'] == conta) &
+                (acoes['cliente'] == cliente) &
+                (acoes['ativo_base'] == ativo) &
+                (acoes['data_registro'] <= data_com)
+            ]['quantidade'].sum()
+        
+            # Provento recebido
+            total_provento += compras_anteriores * prov_row['valor']
+    
+        proventos_total.append(total_provento)
+
+    consolidado['Proventos'] = proventos_total
+
+    # ------------------------------
+    # Preços: fechamento mais recente e inicial
+    # ------------------------------
+    fechamento_recente = precos.sort_values('data_pregao').groupby('codigo_bdi').tail(1)
+    fechamento_recente = fechamento_recente[['codigo_bdi', 'preco_fechamento']]
+
+    datas_inicio = notas.groupby('ativo_base')['data_registro'].min().reset_index()
+    datas_inicio = datas_inicio.rename(columns={'data_registro': 'primeira_data'})
+
+    preco_inicio = pd.merge(datas_inicio, precos, left_on=['ativo_base', 'primeira_data'],
+                            right_on=['codigo_bdi', 'data_pregao'], how='left')
+    preco_inicio = preco_inicio[['ativo_base', 'preco_fechamento']].rename(
+        columns={'preco_fechamento': 'preco_fechamento_inicio_operacoes'})
+
+    # Merge dos preços
+    consolidado = pd.merge(consolidado, fechamento_recente, left_on='ativo_base', right_on='codigo_bdi', how='left')
+    consolidado = pd.merge(consolidado, preco_inicio, on='ativo_base', how='left')
+    consolidado.rename(columns={'preco_fechamento': 'preco_fechamento'}, inplace=True)
+
+    # ------------------------------
+    # Tratamento de datas antes de enviar ao banco
+    # ------------------------------
+    consolidado['data_inicio'] = pd.to_datetime(consolidado['data_inicio'], errors='coerce')
+    consolidado['data_inicio'] = consolidado['data_inicio'].dt.strftime('%Y-%m-%d %H:%M:%S')
+    consolidado['data_inicio'] = consolidado['data_inicio'].where(pd.notnull(consolidado['data_inicio']), None)
+
+    # ------------------------------
+    # Calcular Rentabilidades (tratar divisão por zero)
+    # ------------------------------
+    def safe_div(num, den):
+        return num / den if den != 0 else 0
+
+    consolidado['Posicao_atual'] = consolidado['quantidade_atual'] * consolidado['preco_fechamento']
+    # Investimento total baseado no preço médio
+    consolidado['investido'] = consolidado['quantidade_atual'] * consolidado['preco_medio']
+
+    # Resultado sem considerar opções
+    consolidado['resultado_sem_opcoes'] = consolidado['Posicao_atual'] - consolidado['investido']
+
+    # Resultado considerando opções (prêmio líquido)
+    consolidado['resultado_com_opcoes'] = consolidado['Posicao_atual'] - consolidado['investido'] + consolidado['Premio_liquido']
+    
+    consolidado['Rentabilidade_sem_premio'] = consolidado.apply(
+        lambda x: safe_div(x['Total_vendas'] + x['Posicao_atual'] - x['Total_compras'], x['Total_compras']), axis=1)
+    consolidado['Rentabilidade_com_premio'] = consolidado.apply(
+        lambda x: safe_div(x['Total_vendas'] + x['Posicao_atual'] + x['Premio_liquido'] - x['Total_compras'], x['Total_compras']), axis=1)
+    consolidado['Rentabilidade_com_proventos'] = consolidado.apply(
+        lambda x: safe_div(x['Total_vendas'] + x['Posicao_atual'] + x['Proventos'] - x['Total_compras'], x['Total_compras']), axis=1)
+    consolidado['Rentabilidade_com_proventos_premios'] = consolidado.apply(
+        lambda x: safe_div(x['Total_vendas'] + x['Posicao_atual'] + x['Proventos'] + x['Premio_liquido'] - x['Total_compras'], x['Total_compras']), axis=1)
+
+    consolidado['variacao_ativo'] = consolidado.apply(
+        lambda x: safe_div(x['preco_fechamento'] - x['preco_fechamento_inicio_operacoes'], x['preco_fechamento_inicio_operacoes']), axis=1)
+
+    # ------------------------------
+    # Inserir no banco
+    # ------------------------------
+    consolidado.to_sql('historico_operacoes', engine, if_exists='append', index=False)
+    print("Histórico de operações atualizado com sucesso!")

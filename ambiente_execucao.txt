@@ -1,0 +1,2 @@
+Python path: C:\Users\Micro\Documents\Sistema Estruturadas\Estruturadas\.venv\Scripts\python.exe
+Current dir: C:\Users\Micro\Documents\Sistema Estruturadas\Estruturadas

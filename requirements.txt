@@ -1,0 +1,8 @@
+streamlit
+pandas
+sqlalchemy
+mysql-connector-python
+pymysql
+streamlit-aggrid
+yfinance
+bcrypt
