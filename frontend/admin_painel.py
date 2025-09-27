@@ -1,5 +1,6 @@
 import streamlit as st
 import tempfile
+from backend.conexao import engine
 from importacao import (
     importar_notas_atualizado,
     importar_historico_precos,
@@ -13,7 +14,7 @@ from importacao import (
     importar_ativos_livres,
     
 )
-from backend.conexao import engine
+
 
 def render():
     st.info("Acesso administrativo liberado.")
