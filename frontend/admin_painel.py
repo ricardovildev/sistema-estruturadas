@@ -1,5 +1,7 @@
 import streamlit as st
 import tempfile
+import sys
+import os
 from importacao import (
     importar_notas_atualizado,
     importar_historico_precos,
@@ -12,11 +14,10 @@ from importacao import (
     atualizar_asset_yahoo,
     importar_ativos_livres,
 )
-import sys
-import os
+
+
+from backend.conexao import engine
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from backend.conexao import engine
-from backend.conexao import engine
 
 
 def render():
