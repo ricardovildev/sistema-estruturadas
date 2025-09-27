@@ -5,3 +5,4 @@ __pycache__/
 *.pyc
 *.xlsx
 *.txtcriar_admin.py
+create_tables.sql

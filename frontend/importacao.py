@@ -19,38 +19,19 @@ from backend.conexao import conectar
 engine = conectar()  # cria a conexão uma vez
 
 def importar_ativos_yahoo(caminho_arquivo: str, tipo_arquivo: str = 'csv') -> str:
-    """
-    Importa ativos para a tabela ativos_yahoo sem apagar colunas extras e sem duplicar registros.
-    """
     try:
         if not os.path.exists(caminho_arquivo):
             return f"Arquivo não encontrado em: {caminho_arquivo}"
 
-        engine = conectar()
+        df = pd.read_csv(caminho_arquivo) if tipo_arquivo == 'csv' else pd.read_excel(caminho_arquivo)
 
-        # Leitura do arquivo
-        if tipo_arquivo == 'csv':
-            df = pd.read_csv(caminho_arquivo)
-        elif tipo_arquivo == 'excel':
-            df = pd.read_excel(caminho_arquivo)
-        else:
-            return "Tipo de arquivo inválido. Use 'csv' ou 'excel'."
-
-        # Verificação das colunas obrigatórias
         if not {'asset_original', 'asset_yahoo'}.issubset(df.columns):
             return "O arquivo deve conter as colunas 'asset_original' e 'asset_yahoo'."
-        
-        # Se asset_yahoo não existir, cria com sufixo .SA
-        if 'asset_yahoo' not in df.columns:
-            df['asset_yahoo'] = df['asset_original'].astype(str).str.strip() + '.SA'
-        else:
-        # Preenche valores ausentes com sufixo .SA
-            df['asset_yahoo'] = df['asset_yahoo'].fillna(df['asset_original'].astype(str).str.strip() + '.SA')
 
-        # Remover linhas com dados ausentes
+        df['asset_yahoo'] = df.get('asset_yahoo', df['asset_original'].astype(str).str.strip() + '.SA')
+        df['asset_yahoo'] = df['asset_yahoo'].fillna(df['asset_original'].astype(str).str.strip() + '.SA')
         df = df.dropna(subset=['asset_original', 'asset_yahoo'])
 
-        # Inserção ou atualização linha a linha
         with engine.begin() as conn:
             for _, row in df.iterrows():
                 query = text("""
@@ -63,13 +44,12 @@ def importar_ativos_yahoo(caminho_arquivo: str, tipo_arquivo: str = 'csv') -> st
                     "yahoo": str(row['asset_yahoo']).strip()
                 })
 
-        return "Ativos importados com sucesso, sem duplicações e mantendo colunas extras."
-
+        return "✅ Ativos importados com sucesso."
     except Exception as e:
-        return f"Erro ao importar ativos: {str(e)}"
+        return f"❌ Erro ao importar ativos: {str(e)}"
 
 
-def obter_lista_assets(engine):
+def obter_lista_assets():
     query = "SELECT asset_original FROM ativos_yahoo"
     df = pd.read_sql(query, engine)
     return df
@@ -90,7 +70,7 @@ def obter_preco_ultimo(asset):
         print(f"Erro ao obter preço de {asset}: {e}")
         return None
     
-def atualizar_preco(engine, ticker, preco):
+def atualizar_preco(ticker, preco):
     hoje = date.today()
     query = text("""
         UPDATE ativos_yahoo
@@ -106,198 +86,175 @@ def atualizar_preco(engine, ticker, preco):
         print(f"Erro ao atualizar {ticker}: {e}")
 
 
-def importar_clientes(caminho_excel):
-    df = pd.read_excel(caminho_excel)
-    engine = conectar()
-    df.to_sql('clientes', con=engine, if_exists='append', index=False)
-    print("Clientes importados com sucesso.")
+def importar_clientes():
+    arquivo = st.file_uploader("📥 Importar clientes (.xlsx)", type=["xlsx"])
+    if arquivo:
+        try:
+            df = pd.read_excel(arquivo)
+            df['conta'] = df['conta'].astype(int)
+            df['data_entrada'] = pd.to_datetime(df['data_entrada'], errors='coerce').dt.date
 
-def importar_vencimentos_opcoes(caminho_excel):
-    df = pd.read_excel(caminho_excel)
-    df['data_vencimento'] = pd.to_datetime(df['data_vencimento'], dayfirst=True, errors='coerce').dt.date
-    engine = conectar()
-    df.to_sql('vencimentos_opcoes', con=engine, if_exists='append', index=False)
-    print("Vencimentos de opções importados com sucesso.")
+            df.to_sql('clientes', con=engine, if_exists='append', index=False)
+            st.success("✅ Clientes importados com sucesso.")
+        except Exception as e:
+            st.error(f"❌ Erro ao importar clientes: {e}")
+
+def importar_vencimentos_opcoes():
+    arquivo = st.file_uploader("📥 Importar vencimentos de opções (.xlsx)", type=["xlsx"])
+    if arquivo:
+        try:
+            df = pd.read_excel(arquivo)
+            df['data_vencimento'] = pd.to_datetime(df['data_vencimento'], dayfirst=True, errors='coerce').dt.date
+
+            df.to_sql('vencimentos_opcoes', con=engine, if_exists='append', index=False)
+            st.success("✅ Vencimentos de opções importados com sucesso.")
+        except Exception as e:
+            st.error(f"❌ Erro ao importar vencimentos: {e}")
 
 def importar_historico_precos():
-    import pandas as pd
-    from io import StringIO
-    from backend.conexao import conectar
-
-    # === CONFIGURAÇÕES ===
-    caminho_arquivo = r'D:/Backup 30-08-2025/Documentos/Sistema Estruturadas/Historico de precos B3/COTAHIST_A2025.txt'
-    nome_tabela = 'historico_precos'
-
-    # === EXTRAÇÃO E TRANSFORMAÇÃO ===
-    colspecs = [
-        (2, 10),   # data_pregao
-        (12, 24),  # codigo_bdi
-        (24, 36),  # codigo_negociacao
-        (27, 39),  # nome_empresa
-        (39, 49),  # especificacao_papel
-        (56, 69),  # preco_abertura
-        (69, 82),  # preco_maximo
-        (82, 95),  # preco_minimo
-        (95, 108), # preco_medio
-        (108, 121),# preco_fechamento
-        (152, 170) # volume_negociado
-    ]
-
-    colnames = [
-        'data_pregao', 'codigo_bdi', 'codigo_negociacao', 'nome_empresa',
-        'especificacao_papel', 'preco_abertura', 'preco_maximo',
-        'preco_minimo', 'preco_medio', 'preco_fechamento', 'volume'
-    ]
-
-    # Ler todas as linhas do arquivo
-    with open(caminho_arquivo, 'r', encoding='latin1') as f:
-        linhas = f.readlines()
-
-    linhas_validas = [linha for linha in linhas if linha.startswith('01')]
-
-    df = pd.read_fwf(StringIO(''.join(linhas_validas)), colspecs=colspecs, names=colnames)
-
-    # Tratar colunas numéricas e datas
-    df['data_pregao'] = pd.to_datetime(df['data_pregao'], format='%Y%m%d')
-    colunas_preco = ['preco_abertura', 'preco_maximo', 'preco_minimo', 'preco_medio', 'preco_fechamento']
-    df[colunas_preco] = df[colunas_preco].astype(float) / 100
-    df['volume'] = df['volume'].astype(float) / 100
-
-    # === CARGA PARA O BANCO ===
-    engine = conectar()
-
-    # Buscar registros já existentes
-    df_existente = pd.read_sql(f"SELECT data_pregao, codigo_bdi FROM {nome_tabela}", engine)
-
-    # Garantir mesmo tipo
-    df['data_pregao'] = pd.to_datetime(df['data_pregao'])
-    df_existente['data_pregao'] = pd.to_datetime(df_existente['data_pregao'])
-
-    # Filtrar apenas registros novos
-    df_novo = df.merge(df_existente, on=['data_pregao', 'codigo_bdi'], how='left', indicator=True)
-    df_novo = df_novo[df_novo['_merge'] == 'left_only'].drop(columns=['_merge'])
-
-    if not df_novo.empty:
-        df_novo.to_sql(nome_tabela, con=engine, if_exists='append', index=False)
-        print(f"{len(df_novo)} registros novos importados para a tabela '{nome_tabela}'.")
-    else:
-        print("Nenhum registro novo para importar.")
-
-
-
-def importar_ativos(caminho_excel):
-    df = pd.read_excel(caminho_excel)
-    df['Data_negociacao'] = pd.to_datetime(df['Data_negociacao'], dayfirst=True).dt.date
-    df['Vencimento'] = pd.to_datetime(df['Vencimento'], errors='coerce', format='%d/%m/%Y').dt.date
-    engine = conectar()
-    df.to_sql('ativos', con=engine, if_exists='append', index=False)
-    print("Ativos importados com sucesso.")
-
-def importar_notas_atualizado(caminho_excel_notas='D:/Backup 30-08-2025/Documentos/Meus_Projetos/Notas.xlsx'):
-    
-    
-    # Leitura da planilha
-    df = pd.read_excel(caminho_excel_notas, decimal=',')
-    df['data_registro'] = pd.to_datetime(df['data_registro'], dayfirst=True).dt.date
-
-    # Inserir novos dados
-    tabela_destino = 'notas'
-    df.to_sql(tabela_destino, con=engine, if_exists='append', index=False)
-
-    # Carregar dados existentes da tabela para atualização
-    query = text("""
-        SELECT id, tipo_mercado, especificacao, on_pn_strike, ativo_base, vencimento 
-        FROM notas 
-        WHERE tipo_mercado LIKE 'OPCAO%' 
-           OR tipo_mercado IN ('EXERC OPC VENDA', 'EXERC OPC COMPRA', 'A VISTA', 'VISTA','FRACIONARIO')
-    """)
-    df_notas = pd.read_sql(query, engine)
-
-    # Define tipo_papel com base em tipo_mercado
-    def definir_tipo_papel(tipo_mercado):
-        tipo = tipo_mercado.upper().strip()
-        if tipo in ['OPCAO DE VENDA', 'OPCAO DE COMPRA']:
-            return 'OPCAO'
-        elif tipo in ['EXERC OPC VENDA', 'EXERC OPC COMPRA', 'A VISTA','VISTA','FRACIONARIO']:
-            return 'ACAO'
-        else:
-            return 'ACAO'
-
-    df_notas['tipo_papel'] = df_notas['tipo_mercado'].apply(definir_tipo_papel)
-
-    # Define tipo_opcao com base em tipo_mercado
-    df_notas['tipo_opcao'] = df_notas['tipo_mercado'].apply(
-        lambda x: 'CALL' if 'COMPRA' in x.upper() else ('PUT' if 'VENDA' in x.upper() else None)
-    )
-
-    # Extrair strike da coluna on_pn_strike
-    def extrair_strike(valor):
+    arquivo = st.file_uploader("📥 Importar histórico de preços B3 (.txt)", type=["txt"])
+    if arquivo:
         try:
-            if not isinstance(valor, str):
-                return None
-            valor_limpo = valor.strip().replace(',', '.')
-            match = re.search(r'(\d+\.\d+)', valor_limpo)
-            return float(match.group(1)) if match else None
-        except:
-            return None
+            colspecs = [
+                (2, 10), (12, 24), (24, 36), (27, 39), (39, 49),
+                (56, 69), (69, 82), (82, 95), (95, 108), (108, 121), (152, 170)
+            ]
+            colnames = [
+                'data_pregao', 'codigo_bdi', 'codigo_negociacao', 'nome_empresa',
+                'especificacao_papel', 'preco_abertura', 'preco_maximo',
+                'preco_minimo', 'preco_medio', 'preco_fechamento', 'volume'
+            ]
 
-    df_notas['strike'] = df_notas['especificacao'].apply(extrair_strike)
+            linhas = arquivo.getvalue().decode('latin1').splitlines()
+            linhas_validas = [linha for linha in linhas if linha.startswith('01')]
 
-    df_notas['on_pn_strike'] = None  # para deixar vazia
+            df = pd.read_fwf(StringIO('\n'.join(linhas_validas)), colspecs=colspecs, names=colnames)
+            df['data_pregao'] = pd.to_datetime(df['data_pregao'], format='%Y%m%d')
+            for col in colnames[5:10]:
+                df[col] = df[col].astype(float) / 100
+            df['volume'] = df['volume'].astype(float) / 100
 
-    # Substituir NaN por None
-    df_notas = df_notas.where(pd.notnull(df_notas), None)
-    df_notas['strike'] = df_notas['strike'].apply(lambda x: None if pd.isna(x) else x)
+            nome_tabela = 'historico_precos'
+            df_existente = pd.read_sql(f"SELECT data_pregao, codigo_bdi FROM {nome_tabela}", engine)
+            df_existente['data_pregao'] = pd.to_datetime(df_existente['data_pregao'])
 
-    # Extrair letra da opção
-    df_notas['letra_call_put'] = df_notas['especificacao'].str[4]
+            df_novo = df.merge(df_existente, on=['data_pregao', 'codigo_bdi'], how='left', indicator=True)
+            df_novo = df_novo[df_novo['_merge'] == 'left_only'].drop(columns=['_merge'])
 
-    # Carregar vencimentos
-    df_vencimentos = pd.read_sql("SELECT codigo_letra, data_vencimento FROM vencimentos_opcoes", engine)
-    df_datas_registro = pd.read_sql("SELECT id, data_registro FROM notas", engine)
-    df_notas = df_notas.merge(df_datas_registro, on='id', how='left')
+            if not df_novo.empty:
+                df_novo.to_sql(nome_tabela, con=engine, if_exists='append', index=False)
+                st.success(f"✅ {len(df_novo)} registros novos importados para '{nome_tabela}'.")
+            else:
+                st.info("ℹ️ Nenhum registro novo para importar.")
+        except Exception as e:
+            st.error(f"❌ Erro ao importar histórico de preços: {e}")
 
-    # Função para encontrar vencimento
-    def encontrar_vencimento(letra, data_registro):
-        datas_possiveis = df_vencimentos[
-            (df_vencimentos['codigo_letra'] == letra) &
-            (df_vencimentos['data_vencimento'] > data_registro)
-        ].sort_values('data_vencimento')
-        return datas_possiveis.iloc[0]['data_vencimento'] if not datas_possiveis.empty else None
 
-    df_notas['vencimento'] = df_notas.apply(
-        lambda row: encontrar_vencimento(row['letra_call_put'], row['data_registro']),
-        axis=1
-    )
 
-    # Atualizar os dados no banco
-    with engine.begin() as conn:
-        for _, row in df_notas.iterrows():
-            conn.execute(text("""
-                UPDATE notas
-                SET tipo_papel = :tipo_papel,
-                    tipo_opcao = :tipo_opcao,
-                    strike = :strike,
-                    ativo_base = :ativo_base,
-                    letra_call_put = :letra_call_put,
-                    vencimento = :vencimento
-                WHERE id = :id
-            """), {
-                'tipo_papel': row['tipo_papel'],
-                'tipo_opcao': row['tipo_opcao'] if pd.notna(row['tipo_opcao']) else None,
-                'strike': row['strike'] if pd.notna(row['strike']) else None,
-                'ativo_base': row['ativo_base'] if pd.notna(row['ativo_base']) else None,
-                'letra_call_put': row['letra_call_put'] if pd.notna(row['letra_call_put']) else None,
-                'vencimento': row['vencimento'] if pd.notna(row['vencimento']) else None,
-                'id': row['id']
-            })
+def importar_ativos():
+    arquivo = st.file_uploader("📥 Importar ativos (.xlsx)", type=["xlsx"])
+    if arquivo:
+        try:
+            df = pd.read_excel(arquivo)
+            df['Data_negociacao'] = pd.to_datetime(df['Data_negociacao'], dayfirst=True).dt.date
+            df['Vencimento'] = pd.to_datetime(df['Vencimento'], errors='coerce', format='%d/%m/%Y').dt.date
 
-    print("✅ Dados atualizados com sucesso na tabela 'notas'")
-    print(f"📥 Dados importados com sucesso para a tabela '{tabela_destino}'")
+            df.to_sql('ativos', con=engine, if_exists='append', index=False)
+            st.success("✅ Ativos importados com sucesso.")
+        except Exception as e:
+            st.error(f"❌ Erro ao importar ativos: {e}")
+
+def importar_notas_atualizado():
+    arquivo = st.file_uploader("📥 Importar notas (.xlsx)", type=["xlsx"])
+    if arquivo:
+        try:
+            df = pd.read_excel(arquivo, decimal=',')
+            df['data_registro'] = pd.to_datetime(df['data_registro'], dayfirst=True).dt.date
+            tabela_destino = 'notas'
+            df.to_sql(tabela_destino, con=engine, if_exists='append', index=False)
+
+            query = text("""
+                SELECT id, tipo_mercado, especificacao, on_pn_strike, ativo_base, vencimento 
+                FROM notas 
+                WHERE tipo_mercado LIKE 'OPCAO%' 
+                   OR tipo_mercado IN ('EXERC OPC VENDA', 'EXERC OPC COMPRA', 'A VISTA', 'VISTA','FRACIONARIO')
+            """)
+            df_notas = pd.read_sql(query, engine)
+
+            def definir_tipo_papel(tipo_mercado):
+                tipo = tipo_mercado.upper().strip()
+                if tipo in ['OPCAO DE VENDA', 'OPCAO DE COMPRA']:
+                    return 'OPCAO'
+                elif tipo in ['EXERC OPC VENDA', 'EXERC OPC COMPRA', 'A VISTA','VISTA','FRACIONARIO']:
+                    return 'ACAO'
+                else:
+                    return 'ACAO'
+
+            df_notas['tipo_papel'] = df_notas['tipo_mercado'].apply(definir_tipo_papel)
+            df_notas['tipo_opcao'] = df_notas['tipo_mercado'].apply(
+                lambda x: 'CALL' if 'COMPRA' in x.upper() else ('PUT' if 'VENDA' in x.upper() else None)
+            )
+
+            def extrair_strike(valor):
+                try:
+                    if not isinstance(valor, str):
+                        return None
+                    valor_limpo = valor.strip().replace(',', '.')
+                    match = re.search(r'(\d+\.\d+)', valor_limpo)
+                    return float(match.group(1)) if match else None
+                except:
+                    return None
+
+            df_notas['strike'] = df_notas['especificacao'].apply(extrair_strike)
+            df_notas['on_pn_strike'] = None
+            df_notas = df_notas.where(pd.notnull(df_notas), None)
+            df_notas['strike'] = df_notas['strike'].apply(lambda x: None if pd.isna(x) else x)
+            df_notas['letra_call_put'] = df_notas['especificacao'].str[4]
+
+            df_vencimentos = pd.read_sql("SELECT codigo_letra, data_vencimento FROM vencimentos_opcoes", engine)
+            df_datas_registro = pd.read_sql("SELECT id, data_registro FROM notas", engine)
+            df_notas = df_notas.merge(df_datas_registro, on='id', how='left')
+
+            def encontrar_vencimento(letra, data_registro):
+                datas_possiveis = df_vencimentos[
+                    (df_vencimentos['codigo_letra'] == letra) &
+                    (df_vencimentos['data_vencimento'] > data_registro)
+                ].sort_values('data_vencimento')
+                return datas_possiveis.iloc[0]['data_vencimento'] if not datas_possiveis.empty else None
+
+            df_notas['vencimento'] = df_notas.apply(
+                lambda row: encontrar_vencimento(row['letra_call_put'], row['data_registro']),
+                axis=1
+            )
+
+            with engine.begin() as conn:
+                for _, row in df_notas.iterrows():
+                    conn.execute(text("""
+                        UPDATE notas
+                        SET tipo_papel = :tipo_papel,
+                            tipo_opcao = :tipo_opcao,
+                            strike = :strike,
+                            ativo_base = :ativo_base,
+                            letra_call_put = :letra_call_put,
+                            vencimento = :vencimento
+                        WHERE id = :id
+                    """), {
+                        'tipo_papel': row['tipo_papel'],
+                        'tipo_opcao': row['tipo_opcao'] if pd.notna(row['tipo_opcao']) else None,
+                        'strike': row['strike'] if pd.notna(row['strike']) else None,
+                        'ativo_base': row['ativo_base'] if pd.notna(row['ativo_base']) else None,
+                        'letra_call_put': row['letra_call_put'] if pd.notna(row['letra_call_put']) else None,
+                        'vencimento': row['vencimento'] if pd.notna(row['vencimento']) else None,
+                        'id': row['id']
+                    })
+
+            st.success("✅ Dados atualizados com sucesso na tabela 'notas'")
+            st.success(f"📥 Dados importados com sucesso para a tabela '{tabela_destino}'")
+        except Exception as e:
+            st.error(f"❌ Erro ao importar ou atualizar notas: {e}")
 
 
 def calcular_resultado_opcoes():
-    engine = conectar()
     hoje = pd.Timestamp(datetime.today().date())
 
     query = """
@@ -359,34 +316,36 @@ def calcular_resultado_opcoes():
     print("Resultados das opções atualizados com sucesso.")
 
    
-def importar_proventos(caminho_excel):
-    df = pd.read_excel(caminho_excel)
+def importar_proventos():
+    arquivo = st.file_uploader("📥 Importar proventos (.xlsx)", type=["xlsx"])
+    if arquivo:
+        try:
+            df = pd.read_excel(arquivo)
 
-    # Validação de colunas
-    colunas_esperadas = ['ativo', 'tipo', 'data_com', 'data_pagamento', 'valor']
-    if not all(col in df.columns for col in colunas_esperadas):
-        raise ValueError("A planilha não contém todas as colunas esperadas.")
+            # Validação de colunas obrigatórias
+            colunas_esperadas = ['ativo', 'tipo', 'data_com', 'data_pagamento', 'valor']
+            if not all(col in df.columns for col in colunas_esperadas):
+                st.error("❌ A planilha não contém todas as colunas esperadas.")
+                return
 
-    # Conversão de tipos
-    df['data_com'] = pd.to_datetime(df['data_com'], dayfirst=True, errors='coerce').dt.date
-    df['data_pagamento'] = pd.to_datetime(df['data_pagamento'], dayfirst=True, errors='coerce').dt.date
-    df['valor'] = pd.to_numeric(df['valor'], errors='coerce')
+            # Conversão de tipos
+            df['data_com'] = pd.to_datetime(df['data_com'], dayfirst=True, errors='coerce').dt.date
+            df['data_pagamento'] = pd.to_datetime(df['data_pagamento'], dayfirst=True, errors='coerce').dt.date
+            df['valor'] = pd.to_numeric(df['valor'], errors='coerce')
 
-    # Remover linhas inválidas
-    df = df.dropna(subset=['ativo', 'tipo', 'data_com', 'valor'])
+            # Remover linhas inválidas
+            df = df.dropna(subset=['ativo', 'tipo', 'data_com', 'valor'])
 
-    # Conexão e inserção
-    engine = conectar()
-    df.to_sql('proventos', con=engine, if_exists='append', index=False)
-
-    print("✅ Proventos importados com sucesso.")
+            # Inserção no banco
+            df.to_sql('proventos', con=engine, if_exists='append', index=False)
+            st.success("✅ Proventos importados com sucesso.")
+        except Exception as e:
+            st.error(f"❌ Erro ao importar proventos: {e}")
 
 def atualizar_historico_operacoes():
     import pandas as pd
     from sqlalchemy import text
     from backend.conexao import conectar
-
-    engine = conectar()
 
     # ------------------------------
     # Leitura das tabelas
@@ -596,62 +555,63 @@ def atualizar_asset_yahoo(engine=None):
 
     print("Coluna asset_yahoo atualizada com sucesso!")
 
-def importar_ativos_livres(caminho_planilha):
-    # Conectar ao banco
-    engine = conectar()
+def importar_ativos_livres():
+    arquivo = st.file_uploader("📥 Importar ativos livres (.xlsx)", type=["xlsx"])
+    if arquivo:
+        try:
+            df = pd.read_excel(arquivo)
 
-    # Ler a planilha
-    df = pd.read_excel(caminho_planilha)
+            # Padronizar coluna 'Ativo' para garantir correspondência no JOIN
+            if 'Ativo' in df.columns:
+                df['Ativo'] = df['Ativo'].astype(str).str.strip().str.upper()
 
-    # Padronizar coluna 'Ativo' para garantir correspondência no JOIN
-    if 'Ativo' in df.columns:
-        df['Ativo'] = df['Ativo'].astype(str).str.strip().str.upper()
+            # Garantir que colunas numéricas estejam no formato correto
+            colunas_numericas = ['Qtde_Total', 'Qtde_livre', 'Preco_Medio', 'Preco_Atual', 'Rentabilidade']
+            for col in colunas_numericas:
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
 
-    # Garantir que colunas numéricas estejam no formato correto
-    colunas_numericas = ['Qtde_Total', 'Qtde_livre', 'Preco_Medio', 'Preco_Atual', 'Rentabilidade']
-    for col in colunas_numericas:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors='coerce')  # Converte e trata erros como NaN
+            st.write("🔍 Pré-visualização dos dados importados:")
+            st.dataframe(df[['Ativo', 'Preco_Medio', 'Preco_Atual']].head())
 
-    # Visualização dos dados importados (útil para diagnóstico)
-    print("Pré-visualização dos dados importados:")
-    print(df[['Ativo', 'Preco_Medio', 'Preco_Atual']].head())
+            with engine.begin() as conn:
+                conn.execute(text("DELETE FROM ativos_livres"))
+                df.to_sql('ativos_livres', con=conn, if_exists='append', index=False)
 
-    # Limpar a tabela e inserir os dados
-    with engine.begin() as conn:
-        conn.execute(text("DELETE FROM ativos_livres"))
-        df.to_sql('ativos_livres', con=conn, if_exists='append', index=False)
+                # Atualizar Preco_Atual com base na tabela ativos_yahoo
+                conn.execute(text("""
+                    UPDATE ativos_livres AS al
+                    JOIN ativos_yahoo AS ay ON UPPER(TRIM(al.Ativo)) = UPPER(TRIM(ay.asset_original))
+                    SET al.Preco_Atual = ay.Preco_Atual
+                """))
 
-        # Atualizar Preco_Atual com base na tabela ativos_yahoo
-        conn.execute(text("""
-            UPDATE ativos_livres AS al
-            JOIN ativos_yahoo AS ay ON UPPER(TRIM(al.Ativo)) = UPPER(TRIM(ay.asset_original))
-            SET al.Preco_Atual = ay.Preco_Atual
-        """))
+                # Calcular Rentabilidade apenas quando Preco_Medio é válido
+                conn.execute(text("""
+                    UPDATE ativos_livres
+                    SET Rentabilidade = ROUND(((Preco_Atual - Preco_Medio) / Preco_Medio) * 100, 2)
+                    WHERE Preco_Medio IS NOT NULL AND Preco_Medio > 0
+                """))
 
-        # Calcular Rentabilidade apenas quando Preco_Medio é válido
-        conn.execute(text("""
-            UPDATE ativos_livres
-            SET Rentabilidade = ROUND(((Preco_Atual - Preco_Medio) / Preco_Medio) * 100, 2)
-            WHERE Preco_Medio IS NOT NULL AND Preco_Medio > 0
-        """))
+                # Zerar Rentabilidade onde Preco_Medio é inválido
+                conn.execute(text("""
+                    UPDATE ativos_livres
+                    SET Rentabilidade = NULL
+                    WHERE Preco_Medio IS NULL OR Preco_Medio = 0
+                """))
 
-        # Zerar Rentabilidade onde Preco_Medio é inválido
-        conn.execute(text("""
-            UPDATE ativos_livres
-            SET Rentabilidade = NULL
-            WHERE Preco_Medio IS NULL OR Preco_Medio = 0
-        """))
+                # Calcular o volume livre
+                conn.execute(text("""
+                    UPDATE ativos_livres
+                    SET Volume_Livre = ROUND(Qtde_livre * Preco_Atual, 2)
+                    WHERE Qtde_livre IS NOT NULL AND Preco_Atual IS NOT NULL
+                """))
 
-        #Calcular o volume Livre
-        conn.execute(text("""
-            UPDATE ativos_livres
-            SET Volume_Livre = ROUND(Qtde_livre * Preco_Atual, 2)
-            WHERE Qtde_livre IS NOT NULL AND Preco_Atual IS NOT NULL
-        """))
+            st.success("✅ Ativos livres importados e atualizados com sucesso.")
+        except Exception as e:
+            st.error(f"❌ Erro ao importar ativos livres: {e}")
 
 def atualizar_preco_atual_ativos_livres():
-    engine = conectar()
+    
     etapas = [
         "Atualizando preços dos ativos...",
         "Calculando rentabilidade válida...",

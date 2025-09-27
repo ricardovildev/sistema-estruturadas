@@ -27,6 +27,8 @@ from paginas.Ativos_Livres import render as render_ativos
 from paginas.Consulta_de_Notas import render as render_consulta
 from paginas.Posicao_Consolidada import render as render_posicao
 from admin_painel import render as render_admin
+from dotenv import load_dotenv
+load_dotenv()
 
 
 
