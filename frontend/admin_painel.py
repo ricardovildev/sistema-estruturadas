@@ -15,9 +15,9 @@ from importacao import (
     importar_ativos_livres,
 )
 
-
-from backend.conexao import engine
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from backend.conexao import engine
+
 
 
 def render():
