@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from frontend.auth import require_usuario
-from importacao import engine
+from backend.importacao import engine
 
 def render():
     require_usuario()
