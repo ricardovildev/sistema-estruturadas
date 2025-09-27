@@ -164,11 +164,6 @@ def importar_ativos():
         except Exception as e:
             st.error(f"❌ Erro ao importar ativos: {e}")
 
-import pandas as pd
-import re
-from sqlalchemy import text
-from database import engine  # ajuste conforme seu projeto
-
 def importar_notas_atualizado(caminho_arquivo, tipo):
     try:
         if tipo == 'csv':
