@@ -12,6 +12,10 @@ from importacao import (
     atualizar_asset_yahoo,
     importar_ativos_livres,
 )
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from backend.conexao import engine
 from backend.conexao import engine
 
 
