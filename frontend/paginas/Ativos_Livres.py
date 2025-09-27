@@ -3,6 +3,9 @@ import pandas as pd
 from backend.importacao import (
     importar_ativos_livres,
     atualizar_preco_atual_ativos_livres,
+    obter_lista_assets,
+    obter_preco_ultimo,
+    atualizar_preco
     engine
 )
 
@@ -20,13 +23,38 @@ def render():
     st.set_page_config(page_title="Dashboard de Ativos", layout="wide")
     st.title("📊 Dashboard de Ativos Livres")
 
-    # 🔄 Atualizar preços atuais dos ativos livres
-    if st.button("🔄 Atualizar preços atuais"):
-        try:
-            atualizar_preco_atual_ativos_livres()
-            st.success("✅ Preços atualizados com sucesso!")
-        except Exception as e:
-            st.error(f"❌ Erro ao atualizar preços: {e}")
+    st.write("Aqui você pode atualizar os preços dos ativos cadastrados.")
+
+
+    if st.button("🔄 Atualizar todos os preços"):
+        df_assets = obter_lista_assets(engine)
+        atualizados = 0
+        falhas = []
+
+
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+
+
+        for i, row in df_assets.iterrows():
+            ticker_yahoo = row['asset_original'].strip().upper() + ".SA"
+            status_text.text(f"🔍 Atualizando {row['asset_original']}...")
+            preco = obter_preco_ultimo(ticker_yahoo)
+
+
+            if preco is not None:
+                atualizar_preco(engine, row['asset_original'], preco)
+                atualizados += 1
+            else:
+                falhas.append(row['asset_original'])
+
+
+            progress_bar.progress((i + 1) / len(df_assets))
+
+
+        st.success(f"✅ {atualizados} ativos atualizados com sucesso.")
+        if falhas:
+            st.warning(f"⚠️ Falha ao atualizar os seguintes ativos: {', '.join(falhas)}")
 
     # Conectar e carregar dados
     df = pd.read_sql("SELECT * FROM ativos_livres", con=engine)
