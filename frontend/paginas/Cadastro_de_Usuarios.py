@@ -10,10 +10,7 @@ def render():
     if usuario["perfil"] not in ["admin", "usuario"]:
         st.warning("🔒 Acesso restrito.")
         st.stop()
-
-    st.title("🎯 Consulta de Prêmios")
-    st.write("Conteúdo da consulta aqui...")
-
+   
 
 
     # 🧾 Formulário de cadastro
