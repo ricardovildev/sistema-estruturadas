@@ -2,9 +2,6 @@ import streamlit as st
 from sqlalchemy import create_engine
 import ssl
 
-usuario = st.secrets["DBUSER"]
-
-
 def conectar():
     usuario = st.secrets["DBUSER"]
     senha = st.secrets["DBPASSWORD"]
