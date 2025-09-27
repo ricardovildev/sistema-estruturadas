@@ -100,7 +100,7 @@ else:
         render_ativos()
 
     elif pagina == "Importações e Atualizações" and usuario["perfil"] == "admin":
-        render_admin()
+        render_admin(engine)
 
     elif pagina == "Consulta de Notas":
         render_consulta()
