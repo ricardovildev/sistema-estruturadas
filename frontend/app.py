@@ -4,6 +4,12 @@ from datetime import date
 import yfinance as yf
 from st_aggrid import AgGrid, GridOptionsBuilder
 import bcrypt
+import sys
+import os
+
+# adiciona a raiz do projeto ao sys.path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 
 from backend.importacao import (
     importar_notas_atualizado,
