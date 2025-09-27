@@ -2,8 +2,8 @@ import streamlit as st
 import tempfile
 import sys
 import os
-from conexao import conectar
-from importacao import (
+from backend.conexao import conectar
+from backend.importacao import (
     importar_notas_atualizado,
     importar_historico_precos,
     importar_proventos,
