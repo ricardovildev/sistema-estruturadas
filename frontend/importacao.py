@@ -49,7 +49,7 @@ def importar_ativos_yahoo(caminho_arquivo: str, tipo_arquivo: str = 'csv') -> st
         return f"❌ Erro ao importar ativos: {str(e)}"
 
 
-def obter_lista_assets():
+def obter_lista_assets(engine):
     query = "SELECT asset_original FROM ativos_yahoo"
     df = pd.read_sql(query, engine)
     return df
@@ -70,7 +70,7 @@ def obter_preco_ultimo(asset):
         print(f"Erro ao obter preço de {asset}: {e}")
         return None
     
-def atualizar_preco(ticker, preco):
+def atualizar_preco(engine, ticker, preco):
     hoje = date.today()
     query = text("""
         UPDATE ativos_yahoo
