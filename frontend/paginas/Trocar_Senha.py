@@ -31,12 +31,12 @@ def render_trocar_senha():
             resultado = conn.execute(
                 text("SELECT senha_hash FROM usuarios WHERE id = :id"),
                 {"id": usuario_id}
-            ).fetchone()
-
+            ).mappings().fetchone()  # <-- importante o .mappings()
+        
             if resultado is None:
                 st.error("Usuário não encontrado.")
                 return
-
+        
             senha_hash_armazenada = resultado["senha_hash"]
 
             # Verifica se a senha atual está correta
