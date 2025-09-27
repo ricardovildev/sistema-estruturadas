@@ -193,7 +193,7 @@ def importar_ativos(caminho_excel):
     df.to_sql('ativos', con=engine, if_exists='append', index=False)
     print("Ativos importados com sucesso.")
 
-def importar_notas_atualizado(caminho_excel_notas='D:/Backup 30-08-2025/Documentos/Sistema Estruturadas/Notas.xlsx'):
+def importar_notas_atualizado(caminho_excel_notas='D:/Backup 30-08-2025/Documentos/Meus_Projetos/Notas.xlsx'):
     
     
     # Leitura da planilha
@@ -501,13 +501,9 @@ def atualizar_historico_operacoes():
     # ------------------------------
     # Preços
     # ------------------------------
-    #fechamento_recente = precos.sort_values('data_pregao').groupby('codigo_bdi').tail(1)
-   # fechamento_recente = fechamento_recente[['codigo_bdi', 'preco_fechamento']]
+    ativos_yahoo = pd.read_sql("SELECT DISTINCT asset_original, preco_atual FROM ativos_yahoo", engine)
+    precos = precos.drop_duplicates(subset=['codigo_bdi','data_pregao'])
 
-   ############
-   
-   # Mesclar apenas ativo_base com preco_atual
-    ativos_yahoo = pd.read_sql("SELECT asset_original, preco_atual FROM ativos_yahoo", engine)
     consolidado = pd.merge(
         consolidado,
         ativos_yahoo[['asset_original', 'preco_atual']],
@@ -516,19 +512,16 @@ def atualizar_historico_operacoes():
         how='left'
     )
 
-    # Preencher preco_fechamento com preco_atual e remover colunas extras
     consolidado['preco_fechamento'] = consolidado['preco_atual'].fillna(0)
     consolidado.drop(columns=['asset_original', 'preco_atual'], inplace=True)
-
-    ##################
 
     preco_inicio = pd.merge(
         notas.groupby('ativo_base')['data_registro'].min().reset_index(),
         precos, left_on=['ativo_base', 'data_registro'], right_on=['codigo_bdi', 'data_pregao'], how='left'
     )[['ativo_base', 'preco_fechamento']].rename(columns={'preco_fechamento': 'preco_fechamento_inicio_operacoes'})
 
-    #consolidado = pd.merge(consolidado, left_on='ativo_base', right_on='codigo_bdi', how='left')
-    #consolidado = pd.merge(consolidado, precos, left_on='ativo_base', right_on='codigo_bdi', how='left')
+    preco_inicio = preco_inicio.drop_duplicates(subset=['ativo_base'])
+
     consolidado = pd.merge(consolidado, preco_inicio, on='ativo_base', how='left')
     consolidado.rename(columns={'preco_fechamento': 'preco_fechamento'}, inplace=True)
 
@@ -540,7 +533,7 @@ def atualizar_historico_operacoes():
 
     consolidado['resultado_sem_opcoes'] = consolidado['Posicao_atual'] - consolidado['investido']
     consolidado['resultado_com_opcoes'] = consolidado['resultado_sem_opcoes'] + consolidado['Premio_liquido']
-    
+
     consolidado['Rentabilidade_sem_premio'] = consolidado.apply(
         lambda x: safe_div(x['Total_vendas'] + x['Posicao_atual'] - x['Total_compras'], x['Total_compras']), axis=1)
     consolidado['Rentabilidade_com_premio'] = consolidado.apply(
@@ -549,15 +542,35 @@ def atualizar_historico_operacoes():
         lambda x: safe_div(x['Total_vendas'] + x['Posicao_atual'] + x['Proventos'] - x['Total_compras'], x['Total_compras']), axis=1)
     consolidado['Rentabilidade_com_proventos_premios'] = consolidado.apply(
         lambda x: safe_div(x['Total_vendas'] + x['Posicao_atual'] + x['Proventos'] + x['Premio_liquido'] - x['Total_compras'], x['Total_compras']), axis=1)
+    
+        # Preço médio de venda (Total Vendas / Quantidade Vendida)
+    consolidado['preco_medio_vendas'] = consolidado.apply(
+        lambda x: safe_div(x['Total_vendas'], x['Quantidade_vendida']), axis=1)
+
+    # Rentabilidade em reais (valor absoluto)
+
+    # Sem opção: (Preço médio de venda - Preço médio de compra) * Quantidade vendida
+    consolidado['rentabilidade_venda_sem_premio'] = (consolidado['preco_medio_vendas'] - consolidado['preco_medio']) * consolidado['Quantidade_vendida']
+
+    # Com prêmio: rentabilidade sem prêmio + prêmios recebidos (em reais)
+    consolidado['rentabilidade_venda_com_premio'] = consolidado['rentabilidade_venda_sem_premio'] + consolidado['Premios_recebidos']
 
     consolidado['variacao_ativo'] = consolidado.apply(
         lambda x: safe_div(x['preco_fechamento'] - x['preco_fechamento_inicio_operacoes'], x['preco_fechamento_inicio_operacoes']), axis=1)
 
     # ------------------------------
+    # Garantir que não haja duplicados antes de salvar
+    # ------------------------------
+    consolidado = consolidado.drop_duplicates(subset=['conta','cliente','ativo_base'])
+
+    
+
+    # ------------------------------
     # Salvar no banco
     # ------------------------------
     consolidado.to_sql('historico_operacoes', engine, if_exists='append', index=False)
-    print("Histórico de operações atualizado com sucesso!")
+    print("Histórico de operações atualizado com sucesso")
+
 
 
 def atualizar_asset_yahoo(engine=None):
@@ -691,6 +704,49 @@ def atualizar_preco_atual_ativos_livres():
     status_text.text("✅ Atualização concluída com sucesso.")
     st.success("Todos os dados foram atualizados com sucesso.")
 
+
+def consolidar_notas_simples(data_inicio, data_fim, engine):
+    import pandas as pd
+
+    notas = pd.read_sql("""
+        SELECT conta, cliente, ativo_base, tipo_papel, tipo_lado, quantidade, valor_operacao, data_registro
+        FROM notas
+        WHERE data_registro BETWEEN %s AND %s
+    """, engine, params=(data_inicio, data_fim))
+
+    # Separar ações e opções
+    acoes = notas[notas['tipo_papel'] == 'ACAO']
+    opcoes = notas[notas['tipo_papel'] == 'OPCAO']
+
+    # Agrupamento de compras e vendas
+    compras = acoes[acoes['tipo_lado'] == 'C'].groupby(['conta', 'cliente', 'ativo_base']).agg(
+        Quantidade_comprada=('quantidade', 'sum'),
+        Total_compras=('valor_operacao', 'sum')
+    )
+
+    vendas = acoes[acoes['tipo_lado'] == 'V'].groupby(['conta', 'cliente', 'ativo_base']).agg(
+        Quantidade_vendida=('quantidade', 'sum'),
+        Total_vendas=('valor_operacao', 'sum')
+    )
+
+    # Prêmios
+    premios_recebidos = opcoes[opcoes['tipo_lado'] == 'V'].groupby(['conta', 'cliente', 'ativo_base']).agg(
+        Premio_recebido=('valor_operacao', 'sum')
+    )
+
+    premios_pagos = opcoes[opcoes['tipo_lado'] == 'C'].groupby(['conta', 'cliente', 'ativo_base']).agg(
+        Premio_pago=('valor_operacao', 'sum')
+    )
+
+    # Consolidação
+    consolidado = compras.join(vendas, how='outer').join(premios_recebidos, how='outer').join(premios_pagos, how='outer')
+    consolidado = consolidado.fillna(0)
+
+    consolidado['quantidade_atual'] = consolidado['Quantidade_comprada'] - consolidado['Quantidade_vendida']
+    consolidado['Premio_liquido'] = consolidado['Premio_recebido'] - consolidado['Premio_pago']
+
+    consolidado = consolidado.reset_index()
+    return consolidado
 
 
 

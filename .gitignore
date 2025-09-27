@@ -1,0 +1,7 @@
+# Arquivo .gitignore (na raiz)
+backend/conexao.py
+.env
+__pycache__/
+*.pyc
+*.xlsx
+*.txt

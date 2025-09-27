@@ -24,7 +24,11 @@ from importacao import (
 from usuarios import autenticar_usuario
 from paginas.Consulta_de_Premios import render as render_premios
 from paginas.Ativos_Livres import render as render_ativos
+from paginas.Consulta_de_Notas import render as render_consulta
+from paginas.Posicao_Consolidada import render as render_posicao
 from admin_painel import render as render_admin
+
+
 
 # Configuração da página
 st.set_page_config(page_title="Sistema Estruturadas", layout="wide")
@@ -65,13 +69,17 @@ else:
             "Página inicial",
             "Consulta de Prêmios",
             "Ativos Livres",
-            "Importações e Atualizações"
+            "Importações e Atualizações",
+            "Consulta de Notas",
+            "Consulta Posição"
         ]
     else:
         opcoes = [
             "Página inicial",
             "Consulta de Prêmios",
-            "Ativos Livres"
+            "Ativos Livres",
+            "Consulta Posição",
+            "Consulta de Notas"
         ]
 
     pagina = st.sidebar.selectbox("📂 Navegação", opcoes)
@@ -90,6 +98,11 @@ else:
     elif pagina == "Importações e Atualizações" and usuario["perfil"] == "admin":
         render_admin()
 
+    elif pagina == "Consulta de Notas":
+        render_consulta()
+
+    elif pagina == "Consulta Posição":
+            render_posicao()
 
 
 

@@ -6,3 +6,6 @@ pymysql
 streamlit-aggrid
 yfinance
 bcrypt
+openpyxl
+cryptography>=3.3
+pdfplumber
