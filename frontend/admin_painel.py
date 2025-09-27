@@ -10,7 +10,8 @@ from importacao import (
     atualizar_historico_operacoes,
     importar_ativos_yahoo,
     atualizar_asset_yahoo,
-    importar_ativos_livres
+    importar_ativos_livres,
+    engine
 )
 
 def render():
