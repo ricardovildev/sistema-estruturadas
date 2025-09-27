@@ -1,4 +1,5 @@
 import streamlit as st
+import tempfile
 from importacao import (
     importar_notas_atualizado,
     importar_historico_precos,
@@ -19,34 +20,62 @@ def render():
     col1, col2 = st.columns(2)
 
     with col1:
-        if st.button("Importar Notas de Corretagem"):
-            importar_notas_atualizado()
-            st.success("Notas de corretagem importadas com sucesso.")
+        st.subheader("📄 Notas de Corretagem")
+        arquivo_notas = st.file_uploader("Selecione o arquivo de notas", type=["csv", "xlsx"], key="notas")
+        if arquivo_notas is not None:
+            tipo = 'csv' if arquivo_notas.name.endswith('.csv') else 'excel'
+            with tempfile.NamedTemporaryFile(delete=False, suffix=f".{tipo}") as tmp:
+                tmp.write(arquivo_notas.getbuffer())
+                caminho_temp = tmp.name
+            if st.button("Importar Notas"):
+                try:
+                    importar_notas_atualizado(caminho_temp, tipo)
+                    st.success("Notas de corretagem importadas com sucesso.")
+                except Exception as e:
+                    st.error(f"Erro ao importar notas: {e}")
 
         if st.button("Importar Histórico de Preços"):
-            importar_historico_precos()
-            st.success("Histórico de preços importado com sucesso.")
+            try:
+                importar_historico_precos()
+                st.success("Histórico de preços importado com sucesso.")
+            except Exception as e:
+                st.error(f"Erro ao importar histórico: {e}")
 
         if st.button("Importar Proventos"):
-            importar_proventos()
-            st.success("Proventos importados com sucesso.")
+            try:
+                importar_proventos()
+                st.success("Proventos importados com sucesso.")
+            except Exception as e:
+                st.error(f"Erro ao importar proventos: {e}")
 
         if st.button("Importar Ativos"):
-            importar_ativos()
-            st.success("Ativos importados com sucesso.")
+            try:
+                importar_ativos()
+                st.success("Ativos importados com sucesso.")
+            except Exception as e:
+                st.error(f"Erro ao importar ativos: {e}")
 
     with col2:
         if st.button("Calcular Resultado das Opções"):
-            calcular_resultado_opcoes()
-            st.success("Resultado das opções calculado com sucesso.")
+            try:
+                calcular_resultado_opcoes()
+                st.success("Resultado das opções calculado com sucesso.")
+            except Exception as e:
+                st.error(f"Erro ao calcular resultado: {e}")
 
         if st.button("Importar Vencimento das Opções"):
-            importar_vencimentos_opcoes()
-            st.success("Vencimentos importados com sucesso.")
+            try:
+                importar_vencimentos_opcoes()
+                st.success("Vencimentos importados com sucesso.")
+            except Exception as e:
+                st.error(f"Erro ao importar vencimentos: {e}")
 
         if st.button("Atualizar Ativos com código .SA"):
-            atualizar_asset_yahoo()
-            st.success("Ativos atualizados com sucesso.")
+            try:
+                atualizar_asset_yahoo()
+                st.success("Ativos atualizados com sucesso.")
+            except Exception as e:
+                st.error(f"Erro ao atualizar ativos: {e}")
 
     st.subheader("📈 Atualizar Histórico de Operações")
     if st.button("Atualizar histórico"):
@@ -57,25 +86,30 @@ def render():
             st.error(f"❌ Erro ao atualizar: {e}")
 
     st.subheader("📤 Importar Ativos do Yahoo Finance")
-    arquivo = st.file_uploader("Selecione o arquivo de ativos", type=['csv', 'xlsx'])
-    if arquivo:
-        tipo = 'csv' if arquivo.name.endswith('.csv') else 'excel'
-        caminho_temp = f"temp_{arquivo.name}"
-        with open(caminho_temp, "wb") as f:
-            f.write(arquivo.getbuffer())
-
+    arquivo_yahoo = st.file_uploader("Selecione o arquivo de ativos", type=['csv', 'xlsx'], key="yahoo")
+    if arquivo_yahoo is not None:
+        tipo = 'csv' if arquivo_yahoo.name.endswith('.csv') else 'excel'
+        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{tipo}") as tmp:
+            tmp.write(arquivo_yahoo.getbuffer())
+            caminho_temp = tmp.name
         if st.button("Importar ativos"):
-            mensagem = importar_ativos_yahoo(caminho_temp, tipo)
-            if "sucesso" in mensagem.lower():
-                st.success(mensagem)
-            else:
-                st.error(mensagem)
+            try:
+                mensagem = importar_ativos_yahoo(caminho_temp, tipo)
+                if "sucesso" in mensagem.lower():
+                    st.success(mensagem)
+                else:
+                    st.error(mensagem)
+            except Exception as e:
+                st.error(f"Erro ao importar ativos do Yahoo: {e}")
 
     st.subheader("📤 Importar Ativos Livres")
-    arquivo_livres = st.file_uploader("Selecione a planilha de ativos livres", type=["xlsx"])
+    arquivo_livres = st.file_uploader("Selecione a planilha de ativos livres", type=["xlsx"], key="livres")
     if st.button("Importar dados"):
         if arquivo_livres is not None:
-            importar_ativos_livres(arquivo_livres)
-            st.success("Dados importados e atualizados com sucesso!")
+            try:
+                importar_ativos_livres(arquivo_livres)
+                st.success("Dados importados e atualizados com sucesso!")
+            except Exception as e:
+                st.error(f"Erro ao importar ativos livres: {e}")
         else:
             st.warning("Por favor, selecione um arquivo antes de importar.")
