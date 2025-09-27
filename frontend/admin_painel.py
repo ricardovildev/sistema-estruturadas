@@ -15,6 +15,11 @@ from importacao import (
     importar_ativos_livres,
 )
 
+from conexao import conectar
+
+engine = conectar()
+
+
 
 
 
