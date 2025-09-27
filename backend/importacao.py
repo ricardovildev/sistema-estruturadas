@@ -14,7 +14,7 @@ import streamlit as st
 
 # Adiciona a pasta raiz (Estruturadas) ao path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from conexao import conectar
+from backend.conexao import conectar
 
 engine = conectar()  # cria a conexão uma vez
 
