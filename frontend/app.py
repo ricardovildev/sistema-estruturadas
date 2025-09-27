@@ -5,7 +5,7 @@ import yfinance as yf
 from st_aggrid import AgGrid, GridOptionsBuilder
 import bcrypt
 
-from importacao import (
+from backend.importacao import (
     importar_notas_atualizado,
     importar_historico_precos,
     importar_proventos,
