@@ -44,24 +44,32 @@ load_dotenv()
 st.set_page_config(page_title="Sistema Estruturadas", layout="wide")
 
 # Inicializa sessão
-if "usuario" not in st.session_state:
-    st.session_state.usuario = None
-
-# 🔐 Tela de login
-if st.session_state.usuario is None:
-    st.title("🔐 Login")
-
-    username = st.text_input("Usuário")
-    senha = st.text_input("Senha", type="password")
-
-    if st.button("Entrar"):
+def tentar_login():
+    username = st.session_state.get("username_input")
+    senha = st.session_state.get("senha_input")
+    if username and senha:
         usuario = autenticar_usuario(username, senha)
         if usuario:
             st.session_state.usuario = usuario
             st.success(f"Bem-vindo, {usuario['nome']}!")
-            st.rerun()
+            st.experimental_rerun()
         else:
             st.error("Usuário ou senha inválidos.")
+
+# Inicializa sessão
+if "usuario" not in st.session_state:
+    st.session_state.usuario = None
+
+# Tela de login
+if st.session_state.usuario is None:
+    st.title("🔐 Login")
+
+    st.text_input("Usuário", key="username_input")
+    st.text_input("Senha", type="password", key="senha_input", on_change=tentar_login)
+
+    # Botão opcional para login também
+    if st.button("Entrar"):
+        tentar_login()
 
 # 🔓 Conteúdo do sistema (após login)
 else:
