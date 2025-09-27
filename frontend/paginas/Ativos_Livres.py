@@ -23,7 +23,7 @@ def render():
     # 🔄 Atualizar preços atuais dos ativos livres
     if st.button("🔄 Atualizar preços atuais"):
         try:
-            atualizar_preco_atual_ativos_livres(engine)
+            atualizar_preco_atual_ativos_livres()
             st.success("✅ Preços atualizados com sucesso!")
         except Exception as e:
             st.error(f"❌ Erro ao atualizar preços: {e}")
