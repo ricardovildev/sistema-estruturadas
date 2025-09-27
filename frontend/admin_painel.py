@@ -2,6 +2,7 @@ import streamlit as st
 import tempfile
 import sys
 import os
+from conexao import conectar
 from importacao import (
     importar_notas_atualizado,
     importar_historico_precos,
@@ -15,6 +16,7 @@ from importacao import (
     importar_ativos_livres,
 )
 
+engine = conectar()
 
 def render():
     st.info("Acesso administrativo liberado.")
