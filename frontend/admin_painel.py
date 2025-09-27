@@ -1,6 +1,5 @@
 import streamlit as st
 import tempfile
-from backend.conexao import engine
 from importacao import (
     importar_notas_atualizado,
     importar_historico_precos,
