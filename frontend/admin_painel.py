@@ -109,6 +109,6 @@ def render():
     arquivo_livres = st.file_uploader("Selecione a planilha de ativos livres", type=["xlsx"], key="livres")
     if st.button("Importar dados"):
         if arquivo_livres is not None:
-            importar_ativos_livres(arquivo_livres, engine)
+            importar_ativos_livres(arquivo_livres)
         else:
             st.warning("Por favor, selecione um arquivo antes de importar.")
