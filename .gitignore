@@ -4,4 +4,4 @@ backend/conexao.py
 __pycache__/
 *.pyc
 *.xlsx
-*.txt
+*.txtcriar_admin.py
