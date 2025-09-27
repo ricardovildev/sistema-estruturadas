@@ -26,6 +26,7 @@ from paginas.Consulta_de_Premios import render as render_premios
 from paginas.Ativos_Livres import render as render_ativos
 from paginas.Consulta_de_Notas import render as render_consulta
 from paginas.Posicao_Consolidada import render as render_posicao
+from paginas.Cadastro_Usuarios import render as render_cadastrousuario
 from admin_painel import render as render_admin
 from dotenv import load_dotenv
 load_dotenv()
@@ -73,7 +74,8 @@ else:
             "Ativos Livres",
             "Importações e Atualizações",
             "Consulta de Notas",
-            "Consulta Posição"
+            "Consulta Posição",
+            "Cadastro de Usuários"
         ]
     else:
         opcoes = [
@@ -105,6 +107,9 @@ else:
 
     elif pagina == "Consulta Posição":
             render_posicao()
+        
+    elif pagina == "Cadastro de Usuários" and usuario["perfil"] == "admin":
+            render_cadastrousuario()
 
 
 
