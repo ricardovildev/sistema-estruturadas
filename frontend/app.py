@@ -33,6 +33,7 @@ from paginas.Ativos_Livres import render as render_ativos
 from paginas.Consulta_de_Notas import render as render_consulta
 from paginas.Posicao_Consolidada import render as render_posicao
 from paginas.Cadastro_de_Usuarios import render as render_cadastro_usuario
+from paginas.Trocar_Senha import render_trocar_senha
 from admin_painel import render as render_admin
 from dotenv import load_dotenv
 load_dotenv()
@@ -81,7 +82,8 @@ else:
             "Importações e Atualizações",
             "Consulta de Notas",
             "Consulta Posição",
-            "Cadastro de Usuários"
+            "Cadastro de Usuários",
+            "Trocar Senha"
         ]
     else:
         opcoes = [
@@ -89,7 +91,8 @@ else:
             "Consulta de Prêmios",
             "Ativos Livres",
             "Consulta Posição",
-            "Consulta de Notas"
+            "Consulta de Notas",
+            "Trocar Senha"
         ]
 
     pagina = st.sidebar.selectbox("📂 Navegação", opcoes)
@@ -116,7 +119,9 @@ else:
         
     elif pagina == "Cadastro de Usuários" and usuario["perfil"] == "admin":
             render_cadastro_usuario()
-
+        
+    elif pagina == "Trocar Senha":
+        render_trocar_senha()
 
 
 
