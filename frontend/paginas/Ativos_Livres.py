@@ -6,16 +6,16 @@ from importacao import (
     engine
 )
 
-def render():
-    # 🔒 Verifica se o usuário está logado e tem perfil permitido
-    if "usuario" not in st.session_state or st.session_state.usuario is None:
-        st.warning("🔒 Você precisa estar logado.")
-        st.stop()
-
-    usuario = st.session_state.usuario
-    if usuario["perfil"] not in ["admin", "usuario"]:
-        st.warning("🔒 Acesso restrito.")
-        st.stop()
+    def render():
+        # 🔒 Verifica se o usuário está logado e tem perfil permitido
+        if "usuario" not in st.session_state or st.session_state.usuario is None:
+            st.warning("🔒 Você precisa estar logado.")
+            st.stop()
+    
+        usuario = st.session_state.usuario
+        if usuario["perfil"] not in ["admin", "usuario"]:
+            st.warning("🔒 Acesso restrito.")
+            st.stop()
 
         
     
