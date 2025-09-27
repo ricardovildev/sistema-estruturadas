@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from importacao import engine, obter_lista_assets, obter_preco_ultimo, atualizar_preco
+from backend.importacao import engine, obter_lista_assets, obter_preco_ultimo, atualizar_preco
 from frontend.auth import require_usuario
 
 
