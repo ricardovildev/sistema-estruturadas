@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from importacao import (
+from backend.importacao import (
     importar_ativos_livres,
     atualizar_preco_atual_ativos_livres,
     engine
