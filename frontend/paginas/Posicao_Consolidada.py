@@ -13,7 +13,6 @@ def render():
     # -----------------------------
     # ATUALIZAÇÃO DE PREÇOS
     # -----------------------------
-    st.title("🎯 Consulta de Prêmios")
     st.write("Aqui você pode atualizar os preços dos ativos cadastrados.")
 
 
