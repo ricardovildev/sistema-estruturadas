@@ -6,3 +6,4 @@ __pycache__/
 *.xlsx
 *.txtcriar_admin.py
 create_tables.sql
+estruturadas.sql
