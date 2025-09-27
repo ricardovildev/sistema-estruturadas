@@ -5,7 +5,7 @@ from backend.importacao import (
     atualizar_preco_atual_ativos_livres,
     obter_lista_assets,
     obter_preco_ultimo,
-    atualizar_preco
+    atualizar_preco,
     engine
 )
 
