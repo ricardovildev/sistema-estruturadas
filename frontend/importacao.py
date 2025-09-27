@@ -556,7 +556,7 @@ def atualizar_asset_yahoo(engine=None):
     print("Coluna asset_yahoo atualizada com sucesso!")
 
 def importar_ativos_livres(engine):
-    arquivo = st.file_uploader("📥 Importar ativos livres (.xlsx)", type=["xlsx"])
+    
     if arquivo:
         try:
             df = pd.read_excel(arquivo)
