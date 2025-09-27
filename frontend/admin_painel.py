@@ -11,8 +11,9 @@ from importacao import (
     importar_ativos_yahoo,
     atualizar_asset_yahoo,
     importar_ativos_livres,
-    engine
+    
 )
+from backend.conexao import engine
 
 def render():
     st.info("Acesso administrativo liberado.")
