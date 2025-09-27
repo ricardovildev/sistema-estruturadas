@@ -15,13 +15,6 @@ from importacao import (
     importar_ativos_livres,
 )
 
-from backend.conexao import conectar
-
-engine = conectar()
-
-
-
-
 
 def render():
     st.info("Acesso administrativo liberado.")
