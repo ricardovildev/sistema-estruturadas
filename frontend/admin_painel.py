@@ -104,12 +104,8 @@ def render():
 
     st.subheader("📤 Importar Ativos Livres")
     arquivo_livres = st.file_uploader("Selecione a planilha de ativos livres", type=["xlsx"], key="livres")
-    if st.button("Importar dados"):
-        if arquivo_livres is not None:
-            try:
-                importar_ativos_livres(arquivo_livres)
-                st.success("Dados importados e atualizados com sucesso!")
-            except Exception as e:
-                st.error(f"Erro ao importar ativos livres: {e}")
-        else:
-            st.warning("Por favor, selecione um arquivo antes de importar.")
+if st.button("Importar dados"):
+    if arquivo_livres is not None:
+        importar_ativos_livres(arquivo_livres, engine)
+    else:
+        st.warning("Por favor, selecione um arquivo antes de importar.")
