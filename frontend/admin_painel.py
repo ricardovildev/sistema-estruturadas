@@ -11,8 +11,8 @@ from importacao import (
     importar_ativos_yahoo,
     atualizar_asset_yahoo,
     importar_ativos_livres,
-    
 )
+from backend.conexao import engine
 
 
 def render():
