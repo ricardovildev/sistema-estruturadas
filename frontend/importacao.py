@@ -164,95 +164,100 @@ def importar_ativos():
         except Exception as e:
             st.error(f"❌ Erro ao importar ativos: {e}")
 
-def importar_notas_atualizado():
-    arquivo = st.file_uploader("📥 Importar notas (.xlsx)", type=["xlsx"])
-    if arquivo:
-        try:
-            df = pd.read_excel(arquivo, decimal=',')
-            df['data_registro'] = pd.to_datetime(df['data_registro'], dayfirst=True).dt.date
-            tabela_destino = 'notas'
-            df.to_sql(tabela_destino, con=engine, if_exists='append', index=False)
+import pandas as pd
+import re
+from sqlalchemy import text
+from database import engine  # ajuste conforme seu projeto
 
-            query = text("""
-                SELECT id, tipo_mercado, especificacao, on_pn_strike, ativo_base, vencimento 
-                FROM notas 
-                WHERE tipo_mercado LIKE 'OPCAO%' 
-                   OR tipo_mercado IN ('EXERC OPC VENDA', 'EXERC OPC COMPRA', 'A VISTA', 'VISTA','FRACIONARIO')
-            """)
-            df_notas = pd.read_sql(query, engine)
+def importar_notas_atualizado(caminho_arquivo, tipo):
+    try:
+        if tipo == 'csv':
+            df = pd.read_csv(caminho_arquivo, decimal=',')
+        else:
+            df = pd.read_excel(caminho_arquivo, decimal=',')
 
-            def definir_tipo_papel(tipo_mercado):
-                tipo = tipo_mercado.upper().strip()
-                if tipo in ['OPCAO DE VENDA', 'OPCAO DE COMPRA']:
-                    return 'OPCAO'
-                elif tipo in ['EXERC OPC VENDA', 'EXERC OPC COMPRA', 'A VISTA','VISTA','FRACIONARIO']:
-                    return 'ACAO'
-                else:
-                    return 'ACAO'
+        df['data_registro'] = pd.to_datetime(df['data_registro'], dayfirst=True).dt.date
+        tabela_destino = 'notas'
+        df.to_sql(tabela_destino, con=engine, if_exists='append', index=False)
 
-            df_notas['tipo_papel'] = df_notas['tipo_mercado'].apply(definir_tipo_papel)
-            df_notas['tipo_opcao'] = df_notas['tipo_mercado'].apply(
-                lambda x: 'CALL' if 'COMPRA' in x.upper() else ('PUT' if 'VENDA' in x.upper() else None)
-            )
+        query = text("""
+            SELECT id, tipo_mercado, especificacao, on_pn_strike, ativo_base, vencimento 
+            FROM notas 
+            WHERE tipo_mercado LIKE 'OPCAO%' 
+               OR tipo_mercado IN ('EXERC OPC VENDA', 'EXERC OPC COMPRA', 'A VISTA', 'VISTA','FRACIONARIO')
+        """)
+        df_notas = pd.read_sql(query, engine)
 
-            def extrair_strike(valor):
-                try:
-                    if not isinstance(valor, str):
-                        return None
-                    valor_limpo = valor.strip().replace(',', '.')
-                    match = re.search(r'(\d+\.\d+)', valor_limpo)
-                    return float(match.group(1)) if match else None
-                except:
+        def definir_tipo_papel(tipo_mercado):
+            tipo = tipo_mercado.upper().strip()
+            if tipo in ['OPCAO DE VENDA', 'OPCAO DE COMPRA']:
+                return 'OPCAO'
+            elif tipo in ['EXERC OPC VENDA', 'EXERC OPC COMPRA', 'A VISTA','VISTA','FRACIONARIO']:
+                return 'ACAO'
+            else:
+                return 'ACAO'
+
+        df_notas['tipo_papel'] = df_notas['tipo_mercado'].apply(definir_tipo_papel)
+        df_notas['tipo_opcao'] = df_notas['tipo_mercado'].apply(
+            lambda x: 'CALL' if 'COMPRA' in x.upper() else ('PUT' if 'VENDA' in x.upper() else None)
+        )
+
+        def extrair_strike(valor):
+            try:
+                if not isinstance(valor, str):
                     return None
+                valor_limpo = valor.strip().replace(',', '.')
+                match = re.search(r'(\d+\.\d+)', valor_limpo)
+                return float(match.group(1)) if match else None
+            except:
+                return None
 
-            df_notas['strike'] = df_notas['especificacao'].apply(extrair_strike)
-            df_notas['on_pn_strike'] = None
-            df_notas = df_notas.where(pd.notnull(df_notas), None)
-            df_notas['strike'] = df_notas['strike'].apply(lambda x: None if pd.isna(x) else x)
-            df_notas['letra_call_put'] = df_notas['especificacao'].str[4]
+        df_notas['strike'] = df_notas['especificacao'].apply(extrair_strike)
+        df_notas['on_pn_strike'] = None
+        df_notas = df_notas.where(pd.notnull(df_notas), None)
+        df_notas['strike'] = df_notas['strike'].apply(lambda x: None if pd.isna(x) else x)
+        df_notas['letra_call_put'] = df_notas['especificacao'].str[4]
 
-            df_vencimentos = pd.read_sql("SELECT codigo_letra, data_vencimento FROM vencimentos_opcoes", engine)
-            df_datas_registro = pd.read_sql("SELECT id, data_registro FROM notas", engine)
-            df_notas = df_notas.merge(df_datas_registro, on='id', how='left')
+        df_vencimentos = pd.read_sql("SELECT codigo_letra, data_vencimento FROM vencimentos_opcoes", engine)
+        df_datas_registro = pd.read_sql("SELECT id, data_registro FROM notas", engine)
+        df_notas = df_notas.merge(df_datas_registro, on='id', how='left')
 
-            def encontrar_vencimento(letra, data_registro):
-                datas_possiveis = df_vencimentos[
-                    (df_vencimentos['codigo_letra'] == letra) &
-                    (df_vencimentos['data_vencimento'] > data_registro)
-                ].sort_values('data_vencimento')
-                return datas_possiveis.iloc[0]['data_vencimento'] if not datas_possiveis.empty else None
+        def encontrar_vencimento(letra, data_registro):
+            datas_possiveis = df_vencimentos[
+                (df_vencimentos['codigo_letra'] == letra) &
+                (df_vencimentos['data_vencimento'] > data_registro)
+            ].sort_values('data_vencimento')
+            return datas_possiveis.iloc[0]['data_vencimento'] if not datas_possiveis.empty else None
 
-            df_notas['vencimento'] = df_notas.apply(
-                lambda row: encontrar_vencimento(row['letra_call_put'], row['data_registro']),
-                axis=1
-            )
+        df_notas['vencimento'] = df_notas.apply(
+            lambda row: encontrar_vencimento(row['letra_call_put'], row['data_registro']),
+            axis=1
+        )
 
-            with engine.begin() as conn:
-                for _, row in df_notas.iterrows():
-                    conn.execute(text("""
-                        UPDATE notas
-                        SET tipo_papel = :tipo_papel,
-                            tipo_opcao = :tipo_opcao,
-                            strike = :strike,
-                            ativo_base = :ativo_base,
-                            letra_call_put = :letra_call_put,
-                            vencimento = :vencimento
-                        WHERE id = :id
-                    """), {
-                        'tipo_papel': row['tipo_papel'],
-                        'tipo_opcao': row['tipo_opcao'] if pd.notna(row['tipo_opcao']) else None,
-                        'strike': row['strike'] if pd.notna(row['strike']) else None,
-                        'ativo_base': row['ativo_base'] if pd.notna(row['ativo_base']) else None,
-                        'letra_call_put': row['letra_call_put'] if pd.notna(row['letra_call_put']) else None,
-                        'vencimento': row['vencimento'] if pd.notna(row['vencimento']) else None,
-                        'id': row['id']
-                    })
+        with engine.begin() as conn:
+            for _, row in df_notas.iterrows():
+                conn.execute(text("""
+                    UPDATE notas
+                    SET tipo_papel = :tipo_papel,
+                        tipo_opcao = :tipo_opcao,
+                        strike = :strike,
+                        ativo_base = :ativo_base,
+                        letra_call_put = :letra_call_put,
+                        vencimento = :vencimento
+                    WHERE id = :id
+                """), {
+                    'tipo_papel': row['tipo_papel'],
+                    'tipo_opcao': row['tipo_opcao'] if pd.notna(row['tipo_opcao']) else None,
+                    'strike': row['strike'] if pd.notna(row['strike']) else None,
+                    'ativo_base': row['ativo_base'] if pd.notna(row['ativo_base']) else None,
+                    'letra_call_put': row['letra_call_put'] if pd.notna(row['letra_call_put']) else None,
+                    'vencimento': row['vencimento'] if pd.notna(row['vencimento']) else None,
+                    'id': row['id']
+                })
 
-            st.success("✅ Dados atualizados com sucesso na tabela 'notas'")
-            st.success(f"📥 Dados importados com sucesso para a tabela '{tabela_destino}'")
-        except Exception as e:
-            st.error(f"❌ Erro ao importar ou atualizar notas: {e}")
-
+        return "✅ Notas importadas e atualizadas com sucesso!"
+    except Exception as e:
+        return f"❌ Erro ao importar ou atualizar notas: {e}"
 
 def calcular_resultado_opcoes():
     hoje = pd.Timestamp(datetime.today().date())
