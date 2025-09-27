@@ -7,3 +7,4 @@ __pycache__/
 *.txtcriar_admin.py
 create_tables.sql
 estruturadas.sql
+.streamlit
