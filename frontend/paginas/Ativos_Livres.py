@@ -119,16 +119,16 @@ def render():
                           'Preco_Medio', 'Preco_Atual', 'Volume_Livre', 'Rentabilidade']
 
         nomes_personalizados = {
-            'Conta': 'Código da Conta',
-            'Cliente': 'Nome do Cliente',
-            'Ativo': 'Código do Ativo',
-            'Assessor': 'Assessor Responsável',
+            'Conta': 'Conta',
+            'Cliente': 'Cliente',
+            'Ativo': 'Ativo',
+            'Assessor': 'Assessor',
             'Qtde_Total': 'Quantidade Total',
             'Qtde_Livre': 'Quantidade Livre',
-            'Preco_Medio': 'Preço Médio (R$)',
-            'Preco_Atual': 'Preço Atual (R$)',
-            'Volume_Livre': 'Volume Livre (R$)',
-            'Rentabilidade': 'Rentabilidade (%)'
+            'Preco_Medio': 'Preço Médio',
+            'Preco_Atual': 'Preço Atual',
+            'Volume_Livre': 'Volume Livre',
+            'Rentabilidade': 'Rentabilidade'
         }
 
         df_final = df_formatado[colunas_exibir].rename(columns=nomes_personalizados)
