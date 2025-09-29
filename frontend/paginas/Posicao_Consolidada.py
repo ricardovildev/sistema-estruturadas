@@ -159,6 +159,21 @@ def render():
                 if col in df_consulta.columns:
                     df_consulta[col] = df_consulta[col].apply(lambda x: f"R$ {x:,.2f}" if pd.notnull(x) else "R$ 0,00")
 
+            df_consulta = df_consulta.rename(columns={
+                "conta": "Conta",
+                "cliente": "Cliente",
+                "ativo_base": "Ativo",
+                "quantidade_atual": "Quantidade Atual",
+                "preco_medio": "Preço Médio",
+                "preco_medio_vendas": "Preço Médio de Vendas",
+                "rentabilidade_venda_sem_premio": "Rentabilidade Venda Sem Prêmio",
+                "rentabilidade_venda_com_premio": "Rentabilidade Venda Com Prêmio",                
+                "Premio_recebido": "Prêmio Recebido",
+                "Premio_pago": "Prêmio Pago",
+                "Premio_liquido": "Prêmio Líquido"
+            })
+
+
             st.dataframe(df_consulta[cols_exibir], use_container_width=True)
             st.success(f"{len(df_consulta)} registros encontrados.")
 
