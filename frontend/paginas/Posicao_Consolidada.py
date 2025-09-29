@@ -136,6 +136,21 @@ def render():
         try:
             df_consulta = pd.read_sql(query, engine, params=tuple(params))
 
+            df_consulta = df_consulta.rename(columns={
+                "conta": "Conta",
+                "cliente": "Cliente",
+                "ativo_base": "Ativo",
+                "quantidade_atual": "Quantidade Atual",
+                "preco_medio": "Preço Médio",
+                "preco_medio_vendas": "Preço Médio de Vendas",
+                "preco_fechamento": "Preço Atual",
+                "resultado_sem_opcoes": "Rentabilidade Sem Prêmio",
+                "Premio_liquido": "Prêmio Recebido",
+                "resultado_com_opcoes": "Rentabilidade Com Prêmio",
+                "rentabilidade_venda_sem_premio": "Rentabilidade Venda Sem Prêmio",
+                "rentabilidade_venda_com_premio": "Rentabilidade Venda Com Prêmio",
+            })
+
 
             if tipo_posicao == "Zeradas (quantidade <= 0)":
                 cols_exibir = [
@@ -143,40 +158,14 @@ def render():
                     'rentabilidade_venda_sem_premio', 'Premio_liquido', 'rentabilidade_venda_com_premio'
                 ]
                 
-                cols_exibir = cols_exibir.rename(columns={
-                "conta": "Conta",
-                "cliente": "Cliente",
-                "ativo_base": "Ativo",
-                "quantidade_atual": "Quantidade Atual",
-                "preco_medio": "Preço Médio",
-                "preco_medio_vendas": "Preço Médio de Vendas",
-                "rentabilidade_venda_sem_premio": "Rentabilidade Venda Sem Prêmio",
-                "Premio_liquido": "Prêmio Recebido",
-                "rentabilidade_venda_com_premio": "Rentabilidade Venda Com Prêmio",                
-                
-            })
-
-
-                
+                                
             else:
                 cols_exibir = [
                     'conta', 'cliente','ativo_base', 'quantidade_atual', 'preco_medio', 'preco_fechamento',
                     'resultado_sem_opcoes', 'Premio_liquido', 'resultado_com_opcoes'
                 ]
 
-                cols_exibir = cols_exibir.rename(columns={
-                "conta": "Conta",
-                "cliente": "Cliente",
-                "ativo_base": "Ativo",
-                "quantidade_atual": "Quantidade Atual",
-                "preco_medio": "Preço Médio",
-                "preco_fechamento": "Preço Atual",
-                "resultado_sem_opcoes": "Rentabilidade Sem Prêmio",
-                "Premio_liquido": "Prêmio Recebido",
-                "resultado_com_opcoes": "Rentabilidade Com Prêmio",                
                 
-            })
-
 
             # Formatar colunas monetárias e valores
             colunas_formatar = [
