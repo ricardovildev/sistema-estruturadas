@@ -154,23 +154,23 @@ def render():
 
             if tipo_posicao == "Zeradas (quantidade <= 0)":
                 cols_exibir = [
-                    'conta', 'cliente', 'ativo_base','quantidade_atual', 'preco_medio', 'preco_medio_vendas', 
-                    'rentabilidade_venda_sem_premio', 'Premio_liquido', 'rentabilidade_venda_com_premio'
+                    'Conta', 'Cliente', 'Ativo','Quantidade Atual', 'Preço Médio', 'Preço Médio de Vendas', 
+                    'Rentabilidade Venda Sem Prêmio', 'Prêmio Recebido', 'Rentabilidade Venda Com Prêmio'
                 ]
                 
                                 
             else:
                 cols_exibir = [
-                    'conta', 'cliente','ativo_base', 'quantidade_atual', 'preco_medio', 'preco_fechamento',
-                    'resultado_sem_opcoes', 'Premio_liquido', 'resultado_com_opcoes'
+                    'Conta', 'Cliente','Ativo', 'Quantidade Atual', 'Preço Médio', 'Preço Atual',
+                    'Rentabilidade Sem Prêmio', 'Prêmio Recebido', 'Rentabilidade Com Prêmio'
                 ]
 
                 
 
             # Formatar colunas monetárias e valores
             colunas_formatar = [
-                'preco_medio', 'preco_medio_vendas', 'preco_fechamento', 'resultado_sem_opcoes', 'resultado_com_opcoes',
-                'rentabilidade_venda_sem_premio', 'rentabilidade_venda_com_premio', 'Premio_liquido'
+                'Preço Médio', 'Preço Médio de Vendas', 'Preço Atual', 'Rentabilidade Sem Prêmio', 'Rentabilidade Com Prêmio',
+                'Rentabilidade Venda Sem Prêmio', 'Rentabilidade Venda Com Prêmio', 'Prêmio Recebido'
             ]
 
             for col in colunas_formatar:
