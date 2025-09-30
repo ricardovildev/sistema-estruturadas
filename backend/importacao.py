@@ -112,8 +112,9 @@ def importar_vencimentos_opcoes():
             st.error(f"❌ Erro ao importar vencimentos: {e}")
 
 def importar_historico_precos(arquivo):
-    engine = conectar()
     try:
+        engine = conectar()
+
         colspecs = [
             (2, 10), (12, 24), (24, 36), (27, 39), (39, 49),
             (56, 69), (69, 82), (82, 95), (95, 108), (108, 121), (152, 170)
@@ -129,16 +130,19 @@ def importar_historico_precos(arquivo):
 
         dados_str = '\n'.join(linhas_validas)
         df = pd.read_fwf(StringIO(dados_str), colspecs=colspecs, names=colnames)
+
         df['data_pregao'] = pd.to_datetime(df['data_pregao'], format='%Y%m%d')
 
-        for col in colnames[5:10]:
+        # Converter preços e volume dividindo por 100
+        for col in ['preco_abertura', 'preco_maximo', 'preco_minimo', 'preco_medio', 'preco_fechamento']:
             df[col] = df[col].astype(float) / 100
 
         df['volume'] = df['volume'].astype(float) / 100
 
         nome_tabela = 'historico_precos'
 
-        df_existente = pd.read_sql(f"SELECT data_pregao, codigo_bdi FROM {nome_tabela}", engine)
+        # Evita duplicatas pela chave composta
+        df_existente = pd.read_sql(f"SELECT data_pregao, codigo_bdi FROM {nome_tabela}", con=engine)
         df_existente['data_pregao'] = pd.to_datetime(df_existente['data_pregao'])
 
         df_novo = df.merge(df_existente, on=['data_pregao', 'codigo_bdi'], how='left', indicator=True)
