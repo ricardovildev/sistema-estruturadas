@@ -35,6 +35,7 @@ from paginas.Posicao_Consolidada import render as render_posicao
 from paginas.Cadastro_de_Usuarios import render as render_cadastro_usuario
 from paginas.Trocar_Senha import render_trocar_senha
 from admin_painel import render as render_admin
+from paginas.Calculo_Estruturadas import render as render_estrutura
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -116,6 +117,9 @@ else:
 
     elif pagina == "Consulta Posição":
             render_posicao()
+
+    elif pagina == "Cálculo Estruturadas":
+    render_estrutura()
         
     elif pagina == "Cadastro de Usuários" and usuario["perfil"] == "admin":
             render_cadastro_usuario()
