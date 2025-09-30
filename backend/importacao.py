@@ -115,33 +115,45 @@ def importar_historico_precos(arquivo):
     try:
         engine = conectar()
 
-        colspecs = [
-            (2, 10), (12, 24), (24, 36), (27, 39), (39, 49),
-            (56, 69), (69, 82), (82, 95), (95, 108), (108, 121), (152, 170)
-        ]
-        colnames = [
-            'data_pregao', 'codigo_bdi', 'codigo_negociacao', 'nome_empresa',
-            'especificacao_papel', 'preco_abertura', 'preco_maximo',
-            'preco_minimo', 'preco_medio', 'preco_fechamento', 'volume'
-        ]
+        def parse_line(line):
+            return {
+                'data_pregao': line[2:10],
+                'codigo_bdi': line[10:12],
+                'codigo_negociacao': line[12:24].strip(),
+                'tipo_mercado': line[24:27],
+                'nome_empresa': line[27:39].strip(),
+                'especificacao_papel': line[39:49].strip(),
+                'prazo': line[49:52],
+                'moeda_referencia': line[52:56].strip(),
+                'preco_abertura': int(line[56:69]) / 100.0,
+                'preco_maximo': int(line[69:82]) / 100.0,
+                'preco_minimo': int(line[82:95]) / 100.0,
+                'preco_medio': int(line[95:108]) / 100.0,
+                'preco_fechamento': int(line[108:121]) / 100.0,
+                'preco_melhor_compra': int(line[121:134]) / 100.0,
+                'preco_melhor_venda': int(line[134:147]) / 100.0,
+                'negocios': int(line[147:152]),
+                'quantidade_total': int(line[152:170]),
+                'volume_total': int(line[170:188]) / 100.0,
+                'preco_exercicio': int(line[188:201]) / 100.0,
+                'ind_correcao': line[201:202],
+                'data_vencimento': line[202:210],
+                'fator_cotacao': int(line[210:217]),
+                'pontos_exercicio': int(line[217:230]) / 1000000.0,
+                'codigo_isin': line[230:242].strip(),
+                'numero_distribuicao': line[242:245]
+            }
 
         linhas = arquivo.getvalue().decode('latin1').splitlines()
         linhas_validas = [linha for linha in linhas if linha.startswith('01')]
-
-        dados_str = '\n'.join(linhas_validas)
-        df = pd.read_fwf(StringIO(dados_str), colspecs=colspecs, names=colnames)
-
+        dados = [parse_line(linha) for linha in linhas_validas]
+        
+        df = pd.DataFrame(dados)
         df['data_pregao'] = pd.to_datetime(df['data_pregao'], format='%Y%m%d')
-
-        # Converter preços e volume dividindo por 100
-        for col in ['preco_abertura', 'preco_maximo', 'preco_minimo', 'preco_medio', 'preco_fechamento']:
-            df[col] = df[col].astype(float) / 100
-
-        df['volume'] = df['volume'].astype(float) / 100
+        df['data_vencimento'] = pd.to_datetime(df['data_vencimento'], format='%Y%m%d', errors='coerce')
 
         nome_tabela = 'historico_precos'
 
-        # Evita duplicatas pela chave composta
         df_existente = pd.read_sql(f"SELECT data_pregao, codigo_bdi FROM {nome_tabela}", con=engine)
         df_existente['data_pregao'] = pd.to_datetime(df_existente['data_pregao'])
 
