@@ -32,15 +32,13 @@ def tratar_quantidade(row):
 
 def atualizar_preco_ativos(engine):
     with engine.begin() as conn:
-        # Aqui você pode usar seu método para atualizar preços atuais na tabela ativos_yahoo
-        # Exemplo simplificado (executar procedimento já implementado)
-        conn.execute(text("UPDATE ativos_yahoo SET preco_atual = preco_atual"))  # Substitua pela chamada real
+        # Aqui pode ser chamada a rotina real para atualizar preços na tabela ativos_yahoo
+        conn.execute(text("UPDATE ativos_yahoo SET preco_atual = preco_atual"))  # Exemplo simples
     st.success("Preços atualizados com sucesso.")
 
 def calcular_resultados(engine, df):
     hoje = pd.Timestamp.now().normalize()
 
-    # Buscar preco_fechamento da tabela historico_precos baseado em ativo e data de vencimento, só para registros que não tem preco_fechamento ou resultado
     query = text("""
         SELECT hp.codigo_bdi, hp.data_pregao, hp.preco_fechamento
         FROM historico_precos hp
@@ -48,7 +46,6 @@ def calcular_resultados(engine, df):
     df_precos = pd.read_sql(query, engine)
 
     df = df.copy()
-    # Inicializar colunas se não existirem
     for col in ['preco_fechamento', 'resultado']:
         if col not in df.columns:
             df[col] = pd.NA
@@ -56,11 +53,9 @@ def calcular_resultados(engine, df):
     atualizacoes = []
 
     for idx, row in df.iterrows():
-        # Não recalcular se já tem preco_fechamento e resultado
         if pd.notna(row.get('preco_fechamento')) and pd.notna(row.get('resultado')):
             continue
 
-        # Filtrar preco_fechamento para o ativo e data vencimento
         ativo = row['Ativo']
         vencimento = row['Data Vencimento']
         precos_ativos = df_precos[
@@ -72,30 +67,27 @@ def calcular_resultados(engine, df):
             preco_fech = precos_ativos['preco_fechamento'].iloc[0]
             df.at[idx, 'preco_fechamento'] = preco_fech
 
-            # Calculo exemplo de resultado para financiamento sem barreira (como antes)
             strike = row.get('Valor do Strike (1)', 0)
             qtd = row.get('Quantidade Ativa (1)', 0)
             custo_unit = row.get('Custo Unitário Cliente', 0)
             preco_atual = preco_fech
 
-            # Ajuste e resultado baseado no que você definiu
             ajuste = 0
             resultado = 0
-            if preco_atual > strike and qtd < 0:  # Exemplo: call vendida
+            if preco_atual > strike and qtd < 0:
                 ajuste = (strike - preco_atual) * qtd
                 resultado = preco_atual * abs(qtd) + ajuste + custo_unit * abs(qtd)
             else:
-                resultado = custo_unit * abs(qtd)  # premio recebido
+                resultado = custo_unit * abs(qtd)
 
             df.at[idx, 'resultado'] = resultado
 
             atualizacoes.append({
-                'id': row.get('id', None),  # precisa de ID ou chave para update
+                'id': row.get('id', None),
                 'preco_fechamento': preco_fech,
                 'resultado': resultado,
             })
 
-    # Atualizar banco com os resultados calculados se tiver coluna id para update
     with engine.begin() as conn:
         for atualizacao in atualizacoes:
             if atualizacao['id'] is not None:
@@ -142,24 +134,51 @@ def render():
             for i in range(1, 5):
                 df = identificar_opcao(df, i)
 
-            # Salvar df importado no banco (aqui salvar na tabela das operações)
             df.to_sql('suas_tabela_operacoes', con=engine, if_exists='replace', index=False)
             st.success("Planilha importada e salva no banco com sucesso.")
+
+    try:
+        df_bd = pd.read_sql("SELECT * FROM suas_tabela_operacoes", con=engine)
+    except Exception:
+        df_bd = pd.DataFrame(columns=[
+            'Código do Cliente', 'Código do Assessor', 'Código da Operação', 
+            'Data Registro', 'Ativo', 'Estrutura'
+        ])
+
+    if 'Código do Cliente' in df_bd.columns:
+        df_bd = df_bd.rename(columns={'Código do Cliente': 'Conta'})
+
+    st.write("### Filtros para Consulta")
+    with st.form("form_filtros"):
+        filtro_conta = st.multiselect('Conta', options=df_bd['Conta'].dropna().unique())
+        filtro_assessor = st.multiselect('Assessor', options=df_bd['Código do Assessor'].dropna().unique() if 'Código do Assessor' in df_bd else [])
+        filtro_operacao = st.multiselect('Operação', options=df_bd['Código da Operação'].dropna().unique() if 'Código da Operação' in df_bd else [])
+        filtro_ativo = st.multiselect('Ativo', options=df_bd['Ativo'].dropna().unique() if 'Ativo' in df_bd else [])
+        filtro_estrutura = st.multiselect('Estrutura', options=df_bd['Estrutura'].dropna().unique() if 'Estrutura' in df_bd else [])
+        aplicar = st.form_submit_button("Aplicar Filtros")
+
+    df_filtrado = df_bd.copy()
+    if aplicar:
+        if filtro_conta:
+            df_filtrado = df_filtrado[df_filtrado['Conta'].isin(filtro_conta)]
+        if filtro_assessor:
+            df_filtrado = df_filtrado[df_filtrado['Código do Assessor'].isin(filtro_assessor)]
+        if filtro_operacao:
+            df_filtrado = df_filtrado[df_filtrado['Código da Operação'].isin(filtro_operacao)]
+        if filtro_ativo:
+            df_filtrado = df_filtrado[df_filtrado['Ativo'].isin(filtro_ativo)]
+        if filtro_estrutura:
+            df_filtrado = df_filtrado[df_filtrado['Estrutura'].isin(filtro_estrutura)]
+
+    colunas_para_exibir = ['Conta', 'Código do Assessor', 'Código da Operação', 'Data Registro', 'Ativo',
+                          'Estrutura', 'preco_fechamento', 'resultado', 'Ajuste', 'Status', 'Volume', 'Cupons/Premio']
+    colunas_existentes = [c for c in colunas_para_exibir if c in df_filtrado.columns]
+
+    st.dataframe(df_filtrado[colunas_existentes])
 
     if st.button("Atualizar preços atuais"):
         atualizar_preco_ativos(engine)
 
-    df_bd = pd.read_sql("SELECT * FROM suas_tabela_operacoes", con=engine)
-
     if st.button("Calcular Resultados"):
         df_bd = calcular_resultados(engine, df_bd)
-
-    # Ajustar nome coluna para Conta e adicionar Cliente e Assessor ao lado
-    df_bd = df_bd.rename(columns={'Código do Cliente': 'Conta'})
-
-    # Exibir tabela com colunas Conta, Cliente, Assessor, etc.
-    colunas_para_exibir = ['Conta', 'Código do Assessor', 'Código da Operação', 'Data Registro', 'Ativo', 
-                          'Estrutura', 'preco_fechamento', 'resultado', 'Ajuste', 'Status', 'Volume', 'Cupons/Premio']
-    colunas_existentes = [c for c in colunas_para_exibir if c in df_bd.columns]
-
-    st.dataframe(df_bd[colunas_existentes])
+        st.experimental_rerun()
