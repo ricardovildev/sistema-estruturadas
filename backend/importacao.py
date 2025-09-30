@@ -112,49 +112,46 @@ def importar_vencimentos_opcoes():
             st.error(f"❌ Erro ao importar vencimentos: {e}")
 
 def importar_historico_precos(arquivo):
-    
-    if arquivo:
-        try:
-            colspecs = [
-                (2, 10), (12, 24), (24, 36), (27, 39), (39, 49),
-                (56, 69), (69, 82), (82, 95), (95, 108), (108, 121), (152, 170)
-            ]
-            colnames = [
-                'data_pregao', 'codigo_bdi', 'codigo_negociacao', 'nome_empresa',
-                'especificacao_papel', 'preco_abertura', 'preco_maximo',
-                'preco_minimo', 'preco_medio', 'preco_fechamento', 'volume'
-            ]
+    try:
+        colspecs = [
+            (2, 10), (12, 24), (24, 36), (27, 39), (39, 49),
+            (56, 69), (69, 82), (82, 95), (95, 108), (108, 121), (152, 170)
+        ]
+        colnames = [
+            'data_pregao', 'codigo_bdi', 'codigo_negociacao', 'nome_empresa',
+            'especificacao_papel', 'preco_abertura', 'preco_maximo',
+            'preco_minimo', 'preco_medio', 'preco_fechamento', 'volume'
+        ]
 
-            linhas = arquivo.getvalue().decode('latin1').splitlines()
-            linhas_validas = [linha for linha in linhas if linha.startswith('01')]
+        linhas = arquivo.getvalue().decode('latin1').splitlines()
+        linhas_validas = [linha for linha in linhas if linha.startswith('01')]
 
-            dados_str = '\n'.join(linhas_validas)
-            df = pd.read_fwf(StringIO(dados_str), colspecs=colspecs, names=colnames)
-            df['data_pregao'] = pd.to_datetime(df['data_pregao'], format='%Y%m%d')
+        dados_str = '\n'.join(linhas_validas)
+        df = pd.read_fwf(StringIO(dados_str), colspecs=colspecs, names=colnames)
+        df['data_pregao'] = pd.to_datetime(df['data_pregao'], format='%Y%m%d')
 
-            for col in colnames[5:10]:
-                df[col] = df[col].astype(float) / 100
+        for col in colnames[5:10]:
+            df[col] = df[col].astype(float) / 100
 
-            df['volume'] = df['volume'].astype(float) / 100
+        df['volume'] = df['volume'].astype(float) / 100
 
-            nome_tabela = 'historico_precos'
+        nome_tabela = 'historico_precos'
 
-            # Buscar registros existentes para evitar duplicatas
-            df_existente = pd.read_sql(f"SELECT data_pregao, codigo_bdi FROM {nome_tabela}", engine)
-            df_existente['data_pregao'] = pd.to_datetime(df_existente['data_pregao'])
+        df_existente = pd.read_sql(f"SELECT data_pregao, codigo_bdi FROM {nome_tabela}", engine)
+        df_existente['data_pregao'] = pd.to_datetime(df_existente['data_pregao'])
 
-            # Filtra novos registros que ainda não existem no banco
-            df_novo = df.merge(df_existente, on=['data_pregao', 'codigo_bdi'], how='left', indicator=True)
-            df_novo = df_novo[df_novo['_merge'] == 'left_only'].drop(columns=['_merge'])
+        df_novo = df.merge(df_existente, on=['data_pregao', 'codigo_bdi'], how='left', indicator=True)
+        df_novo = df_novo[df_novo['_merge'] == 'left_only'].drop(columns=['_merge'])
 
-            if not df_novo.empty:
-                df_novo.to_sql(nome_tabela, con=engine, if_exists='append', index=False)
-                st.success(f"✅ {len(df_novo)} registros novos importados para '{nome_tabela}'.")
-            else:
-                st.info("ℹ️ Nenhum registro novo para importar.")
+        if not df_novo.empty:
+            df_novo.to_sql(nome_tabela, con=engine, if_exists='append', index=False)
+            st.success(f"✅ {len(df_novo)} registros novos importados para '{nome_tabela}'.")
+        else:
+            st.info("ℹ️ Nenhum registro novo para importar.")
 
-        except Exception as e:
-            st.error(f"❌ Erro ao importar histórico de preços: {e}")
+    except Exception as e:
+        st.error(f"❌ Erro ao importar histórico de preços: {e}")
+        raise e
 
 
 
