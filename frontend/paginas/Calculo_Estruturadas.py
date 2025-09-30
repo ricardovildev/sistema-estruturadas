@@ -1,9 +1,7 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 from backend.conexao import conectar
 from sqlalchemy import text
-from sqlalchemy.types import Integer, String, Date, Numeric
 
 def converter_virgula_para_float(df, colunas):
     for col in colunas:
@@ -34,8 +32,7 @@ def tratar_quantidade(row):
 
 def atualizar_preco_ativos(engine):
     with engine.begin() as conn:
-        # Lógica para atualizar os preços na tabela ativos_yahoo
-        conn.execute(text("UPDATE ativos_yahoo SET preco_atual = preco_atual"))  # Simplificado
+        conn.execute(text("UPDATE ativos_yahoo SET preco_atual = preco_atual"))
     st.success("Preços atualizados com sucesso.")
 
 def calcular_resultados(engine, df):
@@ -78,8 +75,8 @@ def calcular_resultados(engine, df):
 
 def render():
     st.title("Cálculo de Resultados das Operações Estruturadas")
-
     engine = conectar()
+
     st.write("### Importar Planilha Relatório de Posição (1)")
     arquivo = st.file_uploader("Escolha o arquivo (.xlsx)", type=["xlsx"])
 
@@ -102,34 +99,86 @@ def render():
             df['Quantidade'] = df.apply(tratar_quantidade, axis=1)
             for i in range(1, 5):
                 df = identificar_opcao(df, i)
-            df = df.where(pd.notnull(df), None)  # NaNs para None
-            dtype_map = {
-                'Conta': String(50),
-                'Cliente': String(100),
-                'Assessor': String(100),
-                'Código_da_Operação': String(50),
-                'Data_Registro': Date(),
-                'Ativo': String(50),
-                'Estrutura': String(100),
-                'Valor_Ativo': Numeric(15,4),
-                'Data_Vencimento': Date(),
-                'Custo_Unitario_Cliente': Numeric(15,4),
-                # demais colunas conforme necessário
-            }
-            df.to_sql('operacoes_estruturadas', con=engine, if_exists='append', index=False, dtype=dtype_map)
-            st.success("Planilha importada e salva no banco com sucesso.")
 
+            # Adaptar nomes colunas para tabelas SQL (sem espaços, acentos)
+            renomear_colunas = {
+                'Código do Cliente': 'Conta',
+                'Código do Assessor': 'Assessor',
+                'Código da Operação': 'Codigo_da_Operacao',
+                'Data Registro': 'Data_Registro',
+                'Data Vencimento': 'Data_Vencimento',
+                'Valor Ativo': 'Valor_Ativo',
+                'Custo Unitário Cliente': 'Custo_Unitario_Cliente',
+                'Comissão Assessor': 'Comissao_Assessor',
+                'Quantidade Ativa (1)': 'Quantidade_Ativa_1',
+                'Quantidade Boleta (1)': 'Quantidade_Boleta_1',
+                'Tipo (1)': 'Tipo_1',
+                '% do Strike (1)': 'Percentual_Strike_1',
+                'Valor do Strike (1)': 'Valor_Strike_1',
+                '% da Barreira (1)': 'Percentual_Barreira_1',
+                'Valor da Barreira (1)': 'Valor_Barreira_1',
+                'Valor do Rebate (1)': 'Valor_Rebate_1',
+                'Tipo da Barreira (1)': 'Tipo_Barreira_1',
+                'Quantidade Ativa (2)': 'Quantidade_Ativa_2',
+                'Quantidade Boleta (2)': 'Quantidade_Boleta_2',
+                'Tipo (2)': 'Tipo_2',
+                '% do Strike (2)': 'Percentual_Strike_2',
+                'Valor do Strike (2)': 'Valor_Strike_2',
+                '% da Barreira (2)': 'Percentual_Barreira_2',
+                'Valor da Barreira (2)': 'Valor_Barreira_2',
+                'Valor do Rebate (2)': 'Valor_Rebate_2',
+                'Tipo da Barreira (2)': 'Tipo_Barreira_2',
+                'Quantidade Ativa (3)': 'Quantidade_Ativa_3',
+                'Quantidade Boleta (3)': 'Quantidade_Boleta_3',
+                'Tipo (3)': 'Tipo_3',
+                '% do Strike (3)': 'Percentual_Strike_3',
+                'Valor do Strike (3)': 'Valor_Strike_3',
+                '% da Barreira (3)': 'Percentual_Barreira_3',
+                'Valor da Barreira (3)': 'Valor_Barreira_3',
+                'Valor do Rebate (3)': 'Valor_Rebate_3',
+                'Tipo da Barreira (3)': 'Tipo_Barreira_3',
+                'Quantidade Ativa (4)': 'Quantidade_Ativa_4',
+                'Quantidade Boleta (4)': 'Quantidade_Boleta_4',
+                'Tipo (4)': 'Tipo_4',
+                '% do Strike (4)': 'Percentual_Strike_4',
+                'Valor do Strike (4)': 'Valor_Strike_4',
+                '% da Barreira (4)': 'Percentual_Barreira_4',
+                'Valor da Barreira (4)': 'Valor_Barreira_4',
+                'Valor do Rebate (4)': 'Valor_Rebate_4',
+                'Tipo da Barreira (4)': 'Tipo_Barreira_4',
+            }
+
+            df = df.rename(columns=renomear_colunas)
+
+            # Filtrar para colunas que existem na tabela
+            colunas_tabela = [
+                'Conta', 'Cliente', 'Assessor', 'Codigo_da_Operacao', 'Data_Registro',
+                'Ativo', 'Estrutura', 'Valor_Ativo', 'Data_Vencimento', 'Custo_Unitario_Cliente',
+                'Comissao_Assessor', 'Quantidade_Ativa_1', 'Quantidade_Boleta_1', 'Tipo_1',
+                'Percentual_Strike_1', 'Valor_Strike_1', 'Percentual_Barreira_1', 'Valor_Barreira_1',
+                'Valor_Rebate_1', 'Tipo_Barreira_1', 'Quantidade_Ativa_2', 'Quantidade_Boleta_2',
+                'Tipo_2', 'Percentual_Strike_2', 'Valor_Strike_2', 'Percentual_Barreira_2',
+                'Valor_Barreira_2', 'Valor_Rebate_2', 'Tipo_Barreira_2', 'Quantidade_Ativa_3',
+                'Quantidade_Boleta_3', 'Tipo_3', 'Percentual_Strike_3', 'Valor_Strike_3',
+                'Percentual_Barreira_3', 'Valor_Barreira_3', 'Valor_Rebate_3', 'Tipo_Barreira_3',
+                'Quantidade_Ativa_4', 'Quantidade_Boleta_4', 'Tipo_4', 'Percentual_Strike_4',
+                'Valor_Strike_4', 'Percentual_Barreira_4', 'Valor_Barreira_4', 'Valor_Rebate_4',
+                'Tipo_Barreira_4', 'Quantidade'
+            ]
+
+            df = df[[col for col in colunas_tabela if col in df.columns]]
+
+            df = df.where(pd.notnull(df), None)
+
+            df.to_sql('operacoes_estruturadas', con=engine, if_exists='append', index=False)
+
+            st.success("Planilha importada e inserida no banco com sucesso.")
+
+    # Carregar dados para filtros
     try:
         df_bd = pd.read_sql("SELECT * FROM operacoes_estruturadas", con=engine)
     except Exception:
-        df_bd = pd.DataFrame(columns=['Conta', 'Cliente', 'Assessor', 'Código_da_Operação', 'Data_Registro', 'Ativo', 'Estrutura'])
-
-    if 'Código do Cliente' in df_bd.columns:
-        df_bd = df_bd.rename(columns={'Código do Cliente': 'Conta'})
-    if 'Código do Assessor' in df_bd.columns:
-        df_bd['Assessor'] = df_bd['Código do Assessor']
-    if 'Cliente' not in df_bd.columns:
-        df_bd['Cliente'] = ''
+        df_bd = pd.DataFrame(columns=['Conta', 'Cliente', 'Assessor', 'Codigo_da_Operacao', 'Data_Registro', 'Ativo', 'Estrutura'])
 
     st.write("### Filtros para Consulta")
     with st.form("form_filtros"):
@@ -153,8 +202,9 @@ def render():
         if filtro_estrutura:
             df_filtrado = df_filtrado[df_filtrado['Estrutura'].isin(filtro_estrutura)]
 
-    colunas_para_exibir = ['Conta', 'Cliente', 'Assessor', 'Código_da_Operação', 'Data_Registro', 'Ativo',
-                          'Estrutura', 'preco_fechamento', 'resultado', 'Ajuste', 'Status', 'Volume', 'Cupons_Premio']
+    colunas_para_exibir = ['Conta', 'Cliente', 'Assessor', 'Codigo_da_Operacao', 'Data_Registro',
+                          'Ativo', 'Estrutura', 'preco_fechamento', 'resultado', 'Ajuste',
+                          'Status', 'Volume', 'Cupons_Premio']
     colunas_existentes = [c for c in colunas_para_exibir if c in df_filtrado.columns]
 
     st.dataframe(df_filtrado[colunas_existentes])
