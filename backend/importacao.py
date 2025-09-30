@@ -128,16 +128,22 @@ def importar_historico_precos():
             linhas = arquivo.getvalue().decode('latin1').splitlines()
             linhas_validas = [linha for linha in linhas if linha.startswith('01')]
 
-            df = pd.read_fwf(StringIO('\n'.join(linhas_validas)), colspecs=colspecs, names=colnames)
+            dados_str = '\n'.join(linhas_validas)
+            df = pd.read_fwf(StringIO(dados_str), colspecs=colspecs, names=colnames)
             df['data_pregao'] = pd.to_datetime(df['data_pregao'], format='%Y%m%d')
+
             for col in colnames[5:10]:
                 df[col] = df[col].astype(float) / 100
+
             df['volume'] = df['volume'].astype(float) / 100
 
             nome_tabela = 'historico_precos'
+
+            # Buscar registros existentes para evitar duplicatas
             df_existente = pd.read_sql(f"SELECT data_pregao, codigo_bdi FROM {nome_tabela}", engine)
             df_existente['data_pregao'] = pd.to_datetime(df_existente['data_pregao'])
 
+            # Filtra novos registros que ainda não existem no banco
             df_novo = df.merge(df_existente, on=['data_pregao', 'codigo_bdi'], how='left', indicator=True)
             df_novo = df_novo[df_novo['_merge'] == 'left_only'].drop(columns=['_merge'])
 
@@ -146,6 +152,7 @@ def importar_historico_precos():
                 st.success(f"✅ {len(df_novo)} registros novos importados para '{nome_tabela}'.")
             else:
                 st.info("ℹ️ Nenhum registro novo para importar.")
+
         except Exception as e:
             st.error(f"❌ Erro ao importar histórico de preços: {e}")
 
