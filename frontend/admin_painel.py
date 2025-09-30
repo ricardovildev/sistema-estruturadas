@@ -39,7 +39,7 @@ def render():
                     st.error(f"Erro ao importar notas: {e}")
 
         st.subheader("Importar Histórico de Preços")
-        arquivo = st.file_uploader("Escolha o arquivo TXT do histórico de preços para importar", type=["txt"], key="hist_preco")
+        arquivo = st.file_uploader("Escolha o arquivo xlsx do histórico de preços para importar", type=[".xlsx"], key="hist_preco")
         if arquivo is not None:
             if st.button("Importar Histórico de Preços"):
                 try:
