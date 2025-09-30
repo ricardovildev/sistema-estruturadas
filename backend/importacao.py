@@ -112,7 +112,7 @@ def importar_vencimentos_opcoes():
             st.error(f"❌ Erro ao importar vencimentos: {e}")
 
 def importar_historico_precos():
-    arquivo = st.file_uploader("📥 Importar histórico de preços B3 (.txt)", type=["txt"])
+    
     if arquivo:
         try:
             colspecs = [
