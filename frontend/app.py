@@ -83,6 +83,7 @@ else:
             "Importações e Atualizações",
             "Consulta de Notas",
             "Consulta Posição",
+            "Cálculo Estruturadas",
             "Cadastro de Usuários",
             "Trocar Senha"
         ]
