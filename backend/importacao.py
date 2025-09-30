@@ -111,7 +111,7 @@ def importar_vencimentos_opcoes():
         except Exception as e:
             st.error(f"❌ Erro ao importar vencimentos: {e}")
 
-def importar_historico_precos():
+def importar_historico_precos(arquivo):
     
     if arquivo:
         try:
