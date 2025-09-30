@@ -1,7 +1,9 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 from backend.conexao import conectar
 from sqlalchemy import text
+from sqlalchemy.types import Integer, String, Date, Numeric
 
 def converter_virgula_para_float(df, colunas):
     for col in colunas:
@@ -75,8 +77,8 @@ def calcular_resultados(engine, df):
 
 def render():
     st.title("Cálculo de Resultados das Operações Estruturadas")
-
     engine = conectar()
+
     st.write("### Importar Planilha Relatório de Posição (1)")
     arquivo = st.file_uploader("Escolha o arquivo (.xlsx)", type=["xlsx"])
 
@@ -99,20 +101,37 @@ def render():
             df['Quantidade'] = df.apply(tratar_quantidade, axis=1)
             for i in range(1, 5):
                 df = identificar_opcao(df, i)
-            df.to_sql('suas_tabela_operacoes', con=engine, if_exists='replace', index=False)
+            # Substituir nans por None para MySQL
+            df = df.where(pd.notnull(df), None)
+            # Colunas e tipos para compatibilidade no banco
+            dtype_map = {
+                'Conta': String(50),
+                'Cliente': String(100),
+                'Código do Assessor': String(50),
+                'Assessor': String(100),
+                'Código da Operação': String(50),
+                'Data Registro': Date,
+                'Ativo': String(50),
+                'Estrutura': String(100),
+                'Valor Ativo': Numeric(15,4),
+                'Data Vencimento': Date,
+                'Custo Unitário Cliente': Numeric(15,4),
+                # Outros campos conforme necessário
+            }
+            df.to_sql('suas_tabela_operacoes', con=engine, if_exists='append', index=False, dtype=dtype_map)
             st.success("Planilha importada e salva no banco com sucesso.")
 
     try:
         df_bd = pd.read_sql("SELECT * FROM suas_tabela_operacoes", con=engine)
     except Exception:
-        df_bd = pd.DataFrame(columns=['Código do Cliente', 'Cliente', 'Código do Assessor', 'Assessor', 'Código da Operação', 'Data Registro', 'Ativo', 'Estrutura'])
+        df_bd = pd.DataFrame(columns=['Conta', 'Cliente', 'Assessor', 'Código da Operação', 'Data Registro', 'Ativo', 'Estrutura'])
 
     if 'Código do Cliente' in df_bd.columns:
         df_bd = df_bd.rename(columns={'Código do Cliente': 'Conta'})
     if 'Código do Assessor' in df_bd.columns:
         df_bd['Assessor'] = df_bd['Código do Assessor']
     if 'Cliente' not in df_bd.columns:
-        df_bd['Cliente'] = ''  # ou lógica para preencher caso tenha dados
+        df_bd['Cliente'] = ''
 
     st.write("### Filtros para Consulta")
     with st.form("form_filtros"):
@@ -136,7 +155,8 @@ def render():
         if filtro_estrutura:
             df_filtrado = df_filtrado[df_filtrado['Estrutura'].isin(filtro_estrutura)]
 
-    colunas_para_exibir = ['Conta', 'Cliente', 'Assessor', 'Código da Operação', 'Data Registro', 'Ativo', 'Estrutura', 'preco_fechamento', 'resultado', 'Ajuste', 'Status', 'Volume', 'Cupons/Premio']
+    colunas_para_exibir = ['Conta', 'Cliente', 'Assessor', 'Código da Operação', 'Data Registro', 'Ativo',
+                          'Estrutura', 'preco_fechamento', 'resultado', 'Ajuste', 'Status', 'Volume', 'Cupons/Premio']
     colunas_existentes = [c for c in colunas_para_exibir if c in df_filtrado.columns]
 
     st.dataframe(df_filtrado[colunas_existentes])
