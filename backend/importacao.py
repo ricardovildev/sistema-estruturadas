@@ -112,6 +112,7 @@ def importar_vencimentos_opcoes():
             st.error(f"❌ Erro ao importar vencimentos: {e}")
 
 def importar_historico_precos(arquivo):
+    engine = conectar()
     try:
         colspecs = [
             (2, 10), (12, 24), (24, 36), (27, 39), (39, 49),
