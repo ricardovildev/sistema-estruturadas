@@ -40,11 +40,14 @@ def render():
 
         
 
+        st.subheader("Importar Histórico de Preços")
+
+        arquivo = st.file_uploader("Escolha o arquivo TXT do histórico de preços para importar", type=["txt"])
+    
         if arquivo is not None:
             if st.button("Importar Histórico de Preços"):
                 try:
                     importar_historico_precos(arquivo)
-                    st.success("Histórico de preços importado com sucesso.")
                 except Exception as e:
                     st.error(f"Erro ao importar histórico: {e}")
 
