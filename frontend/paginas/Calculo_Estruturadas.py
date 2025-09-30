@@ -50,10 +50,14 @@ def calcular_resultados(engine, df):
 
         ativo = row['Ativo']
         vencimento = row['Data_Vencimento']
+        st.write(f"Processando Ativo: {ativo}, Vencimento: {vencimento}")
 
         precos_ativos = df_precos[
-            (df_precos['codigo_bdi'] == ativo) & (df_precos['data_pregao'] == pd.to_datetime(vencimento))
+            (df_precos['codigo_bdi'] == ativo) &
+            (pd.to_datetime(df_precos['data_pregao']) == pd.to_datetime(vencimento))
         ]
+
+        st.write(f"Preços encontrados: {len(precos_ativos)}")
 
         if not precos_ativos.empty:
             preco_fech = precos_ativos['preco_fechamento'].iloc[0]
@@ -63,6 +67,7 @@ def calcular_resultados(engine, df):
             qtd = row.get('Quantidade_Ativa_1', 0)
             custo_unit = row.get('Custo_Unitario_Cliente', 0)
             preco_atual = preco_fech
+
             ajuste = 0
             resultado = 0
             if preco_atual > strike and qtd < 0:
@@ -78,6 +83,8 @@ def calcular_resultados(engine, df):
                 'preco_fechamento': preco_fech,
                 'resultado': resultado,
             })
+
+    st.write(f"Total atualizações: {len(atualizacoes)}")
 
     with engine.begin() as conn:
         for atualizacao in atualizacoes:
@@ -125,7 +132,6 @@ def render():
             for i in range(1, 5):
                 df = identificar_opcao(df, i)
 
-            # Renomear colunas no formato correto para o banco
             renomear_colunas = {
                 'Código do Cliente': 'Conta',
                 'Código do Assessor': 'Assessor',
@@ -174,28 +180,24 @@ def render():
             }
             df = df.rename(columns=renomear_colunas)
 
-            # Se precisar adicionar preco_atual, inicialize como None ou valor default
             if 'preco_atual' not in df.columns:
                 df['preco_atual'] = None
 
-            # Filtrar as colunas que existem na tabela para evitar erro
             colunas_tabela = [
                 'Conta', 'Cliente', 'Assessor', 'Codigo_da_Operacao', 'Data_Registro',
-                'Ativo', 'Estrutura', 'Valor_Ativo', 'Data_Vencimento',
-                'Custo_Unitario_Cliente', 'Comissao_Assessor', 'Quantidade_Ativa_1',
-                'Quantidade_Boleta_1', 'Tipo_1', 'Percentual_Strike_1', 'Valor_Strike_1',
-                'Percentual_Barreira_1', 'Valor_Barreira_1', 'Valor_Rebate_1',
-                'Tipo_Barreira_1', 'Quantidade_Ativa_2', 'Quantidade_Boleta_2', 'Tipo_2',
-                'Percentual_Strike_2', 'Valor_Strike_2', 'Percentual_Barreira_2',
-                'Valor_Barreira_2', 'Valor_Rebate_2', 'Tipo_Barreira_2', 'Quantidade_Ativa_3',
-                'Quantidade_Boleta_3', 'Tipo_3', 'Percentual_Strike_3', 'Valor_Strike_3',
-                'Percentual_Barreira_3', 'Valor_Barreira_3', 'Valor_Rebate_3',
-                'Tipo_Barreira_3', 'Quantidade_Ativa_4', 'Quantidade_Boleta_4', 'Tipo_4',
-                'Percentual_Strike_4', 'Valor_Strike_4', 'Percentual_Barreira_4',
-                'Valor_Barreira_4', 'Valor_Rebate_4', 'Tipo_Barreira_4', 'Quantidade',
-                'preco_atual', 'preco_fechamento', 'resultado', 'Ajuste', 'Status', 'Volume',
-                'Cupons_Premio'
+                'Ativo', 'Estrutura', 'Valor_Ativo', 'Data_Vencimento', 'Custo_Unitario_Cliente',
+                'Comissao_Assessor', 'Quantidade_Ativa_1', 'Quantidade_Boleta_1', 'Tipo_1',
+                'Percentual_Strike_1', 'Valor_Strike_1', 'Percentual_Barreira_1', 'Valor_Barreira_1',
+                'Valor_Rebate_1', 'Tipo_Barreira_1', 'Quantidade_Ativa_2', 'Quantidade_Boleta_2', 'Tipo_2',
+                'Percentual_Strike_2', 'Valor_Strike_2', 'Percentual_Barreira_2', 'Valor_Barreira_2',
+                'Valor_Rebate_2', 'Tipo_Barreira_2', 'Quantidade_Ativa_3', 'Quantidade_Boleta_3', 'Tipo_3',
+                'Percentual_Strike_3', 'Valor_Strike_3', 'Percentual_Barreira_3', 'Valor_Barreira_3',
+                'Valor_Rebate_3', 'Tipo_Barreira_3', 'Quantidade_Ativa_4', 'Quantidade_Boleta_4', 'Tipo_4',
+                'Percentual_Strike_4', 'Valor_Strike_4', 'Percentual_Barreira_4', 'Valor_Barreira_4',
+                'Valor_Rebate_4', 'Tipo_Barreira_4', 'Quantidade', 'preco_atual', 'preco_fechamento',
+                'resultado', 'Ajuste', 'Status', 'Volume', 'Cupons_Premio'
             ]
+
             df = df[[col for col in colunas_tabela if col in df.columns]]
 
             df = df.where(pd.notnull(df), None)
