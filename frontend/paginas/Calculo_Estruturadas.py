@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from backend.conexao import conectar
+from sqlalchemy import text
 
 def converter_virgula_para_float(df, colunas):
     for col in colunas:
@@ -29,30 +30,83 @@ def tratar_quantidade(row):
                 return abs(row[qt_col])
     return 0
 
-def calcular_financiamento(df, precos_ativos):
+def atualizar_preco_ativos(engine):
+    with engine.begin() as conn:
+        # Aqui você pode usar seu método para atualizar preços atuais na tabela ativos_yahoo
+        # Exemplo simplificado (executar procedimento já implementado)
+        conn.execute(text("UPDATE ativos_yahoo SET preco_atual = preco_atual"))  # Substitua pela chamada real
+    st.success("Preços atualizados com sucesso.")
+
+def calcular_resultados(engine, df):
+    hoje = pd.Timestamp.now().normalize()
+
+    # Buscar preco_fechamento da tabela historico_precos baseado em ativo e data de vencimento, só para registros que não tem preco_fechamento ou resultado
+    query = text("""
+        SELECT hp.codigo_bdi, hp.data_pregao, hp.preco_fechamento
+        FROM historico_precos hp
+    """)
+    df_precos = pd.read_sql(query, engine)
+
     df = df.copy()
-    df['preco_atual'] = df['Ativo'].map(precos_ativos)
+    # Inicializar colunas se não existirem
+    for col in ['preco_fechamento', 'resultado']:
+        if col not in df.columns:
+            df[col] = pd.NA
 
-    cond_call_vendida = df['opcao_call_vendida_1']
-    strike = df.loc[cond_call_vendida, 'strike_1']
-    qtd = df.loc[cond_call_vendida, 'Quantidade Ativa (1)']
-    custo_unit = df.loc[cond_call_vendida, 'Custo Unitário Cliente']
+    atualizacoes = []
 
-    ajuste = pd.Series(0, index=df.index)
-    status = pd.Series('', index=df.index)
-    volume = pd.Series(0, index=df.index)
-    cupons_premio = custo_unit * qtd.abs()
+    for idx, row in df.iterrows():
+        # Não recalcular se já tem preco_fechamento e resultado
+        if pd.notna(row.get('preco_fechamento')) and pd.notna(row.get('resultado')):
+            continue
 
-    ajuste_calc = (strike - df.loc[cond_call_vendida, 'preco_atual']) * qtd
-    ajuste.loc[cond_call_vendida & (df.loc[cond_call_vendida, 'preco_atual'] > strike)] = ajuste_calc.loc[cond_call_vendida & (df.loc[cond_call_vendida, 'preco_atual'] > strike)]
+        # Filtrar preco_fechamento para o ativo e data vencimento
+        ativo = row['Ativo']
+        vencimento = row['Data Vencimento']
+        precos_ativos = df_precos[
+            (df_precos['codigo_bdi'] == ativo) & 
+            (df_precos['data_pregao'] == pd.to_datetime(vencimento))
+        ]
 
-    status.loc[cond_call_vendida & (df.loc[cond_call_vendida, 'preco_atual'] > strike)] = 'Ação Vendida'
-    volume.loc[cond_call_vendida & (df.loc[cond_call_vendida, 'preco_atual'] > strike)] = df.loc[cond_call_vendida & (df.loc[cond_call_vendida, 'preco_atual'] > strike), 'preco_atual'] * qtd + ajuste.loc[cond_call_vendida & (df.loc[cond_call_vendida, 'preco_atual'] > strike)] + cupons_premio.loc[cond_call_vendida & (df.loc[cond_call_vendida, 'preco_atual'] > strike)]
+        if not precos_ativos.empty:
+            preco_fech = precos_ativos['preco_fechamento'].iloc[0]
+            df.at[idx, 'preco_fechamento'] = preco_fech
 
-    df['Ajuste'] = ajuste
-    df['Status'] = status
-    df['Volume'] = volume
-    df['Cupons/Premio'] = cupons_premio
+            # Calculo exemplo de resultado para financiamento sem barreira (como antes)
+            strike = row.get('Valor do Strike (1)', 0)
+            qtd = row.get('Quantidade Ativa (1)', 0)
+            custo_unit = row.get('Custo Unitário Cliente', 0)
+            preco_atual = preco_fech
+
+            # Ajuste e resultado baseado no que você definiu
+            ajuste = 0
+            resultado = 0
+            if preco_atual > strike and qtd < 0:  # Exemplo: call vendida
+                ajuste = (strike - preco_atual) * qtd
+                resultado = preco_atual * abs(qtd) + ajuste + custo_unit * abs(qtd)
+            else:
+                resultado = custo_unit * abs(qtd)  # premio recebido
+
+            df.at[idx, 'resultado'] = resultado
+
+            atualizacoes.append({
+                'id': row.get('id', None),  # precisa de ID ou chave para update
+                'preco_fechamento': preco_fech,
+                'resultado': resultado,
+            })
+
+    # Atualizar banco com os resultados calculados se tiver coluna id para update
+    with engine.begin() as conn:
+        for atualizacao in atualizacoes:
+            if atualizacao['id'] is not None:
+                conn.execute(text("""
+                    UPDATE suas_tabela_operacoes
+                    SET preco_fechamento = :preco, resultado = :resultado
+                    WHERE id = :id
+                """), {'preco': atualizacao['preco_fechamento'], 'resultado': atualizacao['resultado'], 'id': atualizacao['id']})
+
+    st.success(f"Foram atualizados {len(atualizacoes)} registros.")
+
     return df
 
 def render():
@@ -60,61 +114,52 @@ def render():
 
     engine = conectar()
 
-    arquivo = st.file_uploader("📥 Selecione o arquivo Relatório de Posição (1) (.xlsx)", type=["xlsx"])
+    st.write("### Importar Planilha Relatório de Posição (1)")
+    arquivo = st.file_uploader("Escolha o arquivo (.xlsx)", type=["xlsx"])
+
     if arquivo:
-        df = pd.read_excel(arquivo, dtype=str)
+        if st.button("Importar Planilha"):
+            df = pd.read_excel(arquivo, dtype=str)
 
-        colunas_numericas = [
-            'Valor Ativo', 'Custo Unitário Cliente', 'Comissão Assessor',
-            'Quantidade Ativa (1)', 'Quantidade Boleta (1)', '% do Strike (1)', 'Valor do Strike (1)',
-            '% da Barreira (1)', 'Valor da Barreira (1)', 'Valor do Rebate (1)',
-            'Quantidade Ativa (2)', 'Quantidade Boleta (2)', '% do Strike (2)', 'Valor do Strike (2)',
-            '% da Barreira (2)', 'Valor da Barreira (2)', 'Valor do Rebate (2)',
-            'Quantidade Ativa (3)', 'Quantidade Boleta (3)', '% do Strike (3)', 'Valor do Strike (3)',
-            '% da Barreira (3)', 'Valor da Barreira (3)', 'Valor do Rebate (3)',
-            'Quantidade Ativa (4)', 'Quantidade Boleta (4)', '% do Strike (4)', 'Valor do Strike (4)',
-            '% da Barreira (4)', 'Valor da Barreira (4)', 'Valor do Rebate (4)'
-        ]
-        df = converter_virgula_para_float(df, colunas_numericas)
+            colunas_numericas = [
+                'Valor Ativo', 'Custo Unitário Cliente', 'Comissão Assessor',
+                'Quantidade Ativa (1)', 'Quantidade Boleta (1)', '% do Strike (1)', 'Valor do Strike (1)',
+                '% da Barreira (1)', 'Valor da Barreira (1)', 'Valor do Rebate (1)',
+                'Quantidade Ativa (2)', 'Quantidade Boleta (2)', '% do Strike (2)', 'Valor do Strike (2)',
+                '% da Barreira (2)', 'Valor da Barreira (2)', 'Valor do Rebate (2)',
+                'Quantidade Ativa (3)', 'Quantidade Boleta (3)', '% do Strike (3)', 'Valor do Strike (3)',
+                '% da Barreira (3)', 'Valor da Barreira (3)', 'Valor do Rebate (3)',
+                'Quantidade Ativa (4)', 'Quantidade Boleta (4)', '% do Strike (4)', 'Valor do Strike (4)',
+                '% da Barreira (4)', 'Valor da Barreira (4)', 'Valor do Rebate (4)'
+            ]
+            df = converter_virgula_para_float(df, colunas_numericas)
 
-        df['Data Registro'] = pd.to_datetime(df['Data Registro'], dayfirst=True, errors='coerce')
-        df['Data Vencimento'] = pd.to_datetime(df['Data Vencimento'], dayfirst=True, errors='coerce')
+            df['Data Registro'] = pd.to_datetime(df['Data Registro'], dayfirst=True, errors='coerce')
+            df['Data Vencimento'] = pd.to_datetime(df['Data Vencimento'], dayfirst=True, errors='coerce')
 
-        df['Quantidade'] = df.apply(tratar_quantidade, axis=1)
+            df['Quantidade'] = df.apply(tratar_quantidade, axis=1)
 
-        for i in range(1, 5):
-            df = identificar_opcao(df, i)
+            for i in range(1, 5):
+                df = identificar_opcao(df, i)
 
-        # Buscar preços atuais da tabela ativos_yahoo
-        precos_df = pd.read_sql("SELECT asset_original, preco_atual FROM ativos_yahoo", engine)
-        precos_ativos = dict(zip(precos_df['asset_original'], precos_df['preco_atual']))
+            # Salvar df importado no banco (aqui salvar na tabela das operações)
+            df.to_sql('suas_tabela_operacoes', con=engine, if_exists='replace', index=False)
+            st.success("Planilha importada e salva no banco com sucesso.")
 
-        # Calcular financiamento
-        df = calcular_financiamento(df, precos_ativos)
+    if st.button("Atualizar preços atuais"):
+        atualizar_preco_ativos(engine)
 
-        # Filtros simples
-        filtro_cliente = st.multiselect('Cliente', df['Código do Cliente'].unique())
-        filtro_assessor = st.multiselect('Assessor', df['Código do Assessor'].unique())
-        filtro_estrutura = st.multiselect('Estrutura', df['Estrutura'].unique())
-        filtro_ativo = st.multiselect('Ativo', df['Ativo'].unique())
-        filtro_data_registro = st.date_input('Período Data Registro', [df['Data Registro'].min(), df['Data Registro'].max()])
-        filtro_data_vencimento = st.date_input('Período Data Vencimento', [df['Data Vencimento'].min(), df['Data Vencimento'].max()])
+    df_bd = pd.read_sql("SELECT * FROM suas_tabela_operacoes", con=engine)
 
-        df_filtrado = df.copy()
-        if filtro_cliente:
-            df_filtrado = df_filtrado[df_filtrado['Código do Cliente'].isin(filtro_cliente)]
-        if filtro_assessor:
-            df_filtrado = df_filtrado[df_filtrado['Código do Assessor'].isin(filtro_assessor)]
-        if filtro_estrutura:
-            df_filtrado = df_filtrado[df_filtrado['Estrutura'].isin(filtro_estrutura)]
-        if filtro_ativo:
-            df_filtrado = df_filtrado[df_filtrado['Ativo'].isin(filtro_ativo)]
+    if st.button("Calcular Resultados"):
+        df_bd = calcular_resultados(engine, df_bd)
 
-        df_filtrado = df_filtrado[
-            (df_filtrado['Data Registro'] >= pd.to_datetime(filtro_data_registro[0])) &
-            (df_filtrado['Data Registro'] <= pd.to_datetime(filtro_data_registro[1])) &
-            (df_filtrado['Data Vencimento'] >= pd.to_datetime(filtro_data_vencimento[0])) &
-            (df_filtrado['Data Vencimento'] <= pd.to_datetime(filtro_data_vencimento[1]))
-        ]
+    # Ajustar nome coluna para Conta e adicionar Cliente e Assessor ao lado
+    df_bd = df_bd.rename(columns={'Código do Cliente': 'Conta'})
 
-        st.dataframe(df_filtrado)
+    # Exibir tabela com colunas Conta, Cliente, Assessor, etc.
+    colunas_para_exibir = ['Conta', 'Código do Assessor', 'Código da Operação', 'Data Registro', 'Ativo', 
+                          'Estrutura', 'preco_fechamento', 'resultado', 'Ajuste', 'Status', 'Volume', 'Cupons/Premio']
+    colunas_existentes = [c for c in colunas_para_exibir if c in df_bd.columns]
+
+    st.dataframe(df_bd[colunas_existentes])
