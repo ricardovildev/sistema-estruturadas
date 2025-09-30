@@ -111,51 +111,44 @@ def importar_vencimentos_opcoes():
         except Exception as e:
             st.error(f"❌ Erro ao importar vencimentos: {e}")
 
-def importar_historico_precos(arquivo):
+def importar_historico_precos_excel(arquivo_excel):
     try:
         engine = conectar()
 
-        def parse_line(line):
-            return {
-                'data_pregao': line[2:10],
-                'codigo_bdi': line[10:12],
-                'codigo_negociacao': line[12:24].strip(),
-                'tipo_mercado': line[24:27],
-                'nome_empresa': line[27:39].strip(),
-                'especificacao_papel': line[39:49].strip(),
-                'prazo': line[49:52],
-                'moeda_referencia': line[52:56].strip(),
-                'preco_abertura': int(line[56:69]) / 100.0,
-                'preco_maximo': int(line[69:82]) / 100.0,
-                'preco_minimo': int(line[82:95]) / 100.0,
-                'preco_medio': int(line[95:108]) / 100.0,
-                'preco_fechamento': int(line[108:121]) / 100.0,
-                'preco_melhor_compra': int(line[121:134]) / 100.0,
-                'preco_melhor_venda': int(line[134:147]) / 100.0,
-                'negocios': int(line[147:152]),
-                'quantidade_total': int(line[152:170]),
-                'volume_total': int(line[170:188]) / 100.0,
-                'preco_exercicio': int(line[188:201]) / 100.0,
-                'ind_correcao': line[201:202],
-                'data_vencimento': line[202:210],
-                'fator_cotacao': int(line[210:217]),
-                'pontos_exercicio': int(line[217:230]) / 1000000.0,
-                'codigo_isin': line[230:242].strip(),
-                'numero_distribuicao': line[242:245]
-            }
+        df = pd.read_excel(arquivo_excel)
 
-        linhas = arquivo.getvalue().decode('latin1').splitlines()
-        linhas_validas = [linha for linha in linhas if linha.startswith('01')]
-        dados = [parse_line(linha) for linha in linhas_validas]
-        
-        df = pd.DataFrame(dados)
-        df['data_pregao'] = pd.to_datetime(df['data_pregao'], format='%Y%m%d')
-        df['data_vencimento'] = pd.to_datetime(df['data_vencimento'], format='%Y%m%d', errors='coerce')
+        # Ajuste nomes colunas para o padrão do banco (sem espaços, acentos)
+        rename_cols = {
+            'Data Pregão': 'data_pregao',
+            'Código BDI': 'codigo_bdi',
+            'Código de Negociação': 'codigo_negociacao',
+            'Nome Resumido': 'nome_empresa',
+            'Especificação': 'especificacao_papel',
+            'Preço Abertura': 'preco_abertura',
+            'Preço Máximo': 'preco_maximo',
+            'Preço Mínimo': 'preco_minimo',
+            'Preço Médio': 'preco_medio',
+            'Preço Último': 'preco_fechamento',
+            'Volume Total': 'volume'
+            # Inclua outras colunas conforme disponíveis
+        }
+        df = df.rename(columns=rename_cols)
+
+        # Converter datas no formato correto
+        df['data_pregao'] = pd.to_datetime(df['data_pregao'], errors='coerce').dt.date
+
+        # Converter campos numéricos para float caso necessário
+        col_precos = ['preco_abertura', 'preco_maximo', 'preco_minimo', 'preco_medio', 'preco_fechamento']
+        for col in col_precos:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+
+        df['volume'] = pd.to_numeric(df['volume'], errors='coerce')
 
         nome_tabela = 'historico_precos'
 
+        # Carregar registros existentes para evitar duplicação
         df_existente = pd.read_sql(f"SELECT data_pregao, codigo_bdi FROM {nome_tabela}", con=engine)
-        df_existente['data_pregao'] = pd.to_datetime(df_existente['data_pregao'])
+        df_existente['data_pregao'] = pd.to_datetime(df_existente['data_pregao']).dt.date
 
         df_novo = df.merge(df_existente, on=['data_pregao', 'codigo_bdi'], how='left', indicator=True)
         df_novo = df_novo[df_novo['_merge'] == 'left_only'].drop(columns=['_merge'])
