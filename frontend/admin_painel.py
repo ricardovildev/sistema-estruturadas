@@ -1,7 +1,6 @@
 import streamlit as st
 import tempfile
-import sys
-import os
+from io import StringIO
 from backend.conexao import conectar
 from backend.importacao import (
     importar_notas_atualizado,
@@ -15,7 +14,6 @@ from backend.importacao import (
     atualizar_asset_yahoo,
     importar_ativos_livres,
 )
-
 
 def render():
     st.info("Acesso administrativo liberado.")
@@ -40,7 +38,7 @@ def render():
                 except Exception as e:
                     st.error(f"Erro ao importar notas: {e}")
 
-        arquivo = st.file_uploader("Escolha o arquivo TXT do histórico de preços para importar", type=["txt"])
+        arquivo = st.file_uploader("Escolha o arquivo TXT do histórico de preços para importar", type=["txt"], key="hist_precos")
 
         if arquivo is not None:
             if st.button("Importar Histórico de Preços"):
@@ -115,6 +113,10 @@ def render():
     arquivo_livres = st.file_uploader("Selecione a planilha de ativos livres", type=["xlsx"], key="livres")
     if st.button("Importar dados"):
         if arquivo_livres is not None:
-            importar_ativos_livres(arquivo_livres, engine)
+            try:
+                importar_ativos_livres(arquivo_livres, engine)
+                st.success("Ativos livres importados com sucesso.")
+            except Exception as e:
+                st.error(f"Erro ao importar ativos livres: {e}")
         else:
             st.warning("Por favor, selecione um arquivo antes de importar.")
