@@ -116,13 +116,13 @@ else:
         render_consulta()
 
     elif pagina == "Consulta Posição":
-            render_posicao()
+        render_posicao()
 
     elif pagina == "Cálculo Estruturadas":
-    render_estrutura()
+        render_estrutura()
         
     elif pagina == "Cadastro de Usuários" and usuario["perfil"] == "admin":
-            render_cadastro_usuario()
+        render_cadastro_usuario()
         
     elif pagina == "Trocar Senha":
         render_trocar_senha()
