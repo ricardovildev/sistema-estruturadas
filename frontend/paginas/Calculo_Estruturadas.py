@@ -72,7 +72,7 @@ def calcular_resultados(engine, df):
     with engine.begin() as conn:
         for atualizacao in atualizacoes:
             if atualizacao['id'] is not None:
-                conn.execute(text("UPDATE suas_tabela_operacoes SET preco_fechamento = :preco, resultado = :resultado WHERE id = :id"), {'preco': atualizacao['preco_fechamento'], 'resultado': atualizacao['resultado'], 'id': atualizacao['id']})
+                conn.execute(text("UPDATE operacoes_estruturadas SET preco_fechamento = :preco, resultado = :resultado WHERE id = :id"), {'preco': atualizacao['preco_fechamento'], 'resultado': atualizacao['resultado'], 'id': atualizacao['id']})
     st.success(f"Foram atualizados {len(atualizacoes)} registros.")
     return df
 
@@ -116,11 +116,11 @@ def render():
                 'Custo_Unitario_Cliente': Numeric(15,4),
                 # demais colunas conforme necessário
             }
-            df.to_sql('suas_tabela_operacoes', con=engine, if_exists='append', index=False, dtype=dtype_map)
+            df.to_sql('operacoes_estruturadas', con=engine, if_exists='append', index=False, dtype=dtype_map)
             st.success("Planilha importada e salva no banco com sucesso.")
 
     try:
-        df_bd = pd.read_sql("SELECT * FROM suas_tabela_operacoes", con=engine)
+        df_bd = pd.read_sql("SELECT * FROM operacoes_estruturadas", con=engine)
     except Exception:
         df_bd = pd.DataFrame(columns=['Conta', 'Cliente', 'Assessor', 'Código_da_Operação', 'Data_Registro', 'Ativo', 'Estrutura'])
 
