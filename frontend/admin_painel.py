@@ -4,7 +4,7 @@ from io import StringIO
 from backend.conexao import conectar
 from backend.importacao import (
     importar_notas_atualizado,
-    importar_historico_precos,
+    importar_historico_precos_excel,
     importar_proventos,
     importar_ativos,
     calcular_resultado_opcoes,
