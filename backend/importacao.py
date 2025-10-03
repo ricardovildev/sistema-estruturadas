@@ -112,45 +112,71 @@ def importar_vencimentos_opcoes():
             st.error(f"❌ Erro ao importar vencimentos: {e}")
 
 def importar_historico_precos_excel(arquivo_excel):
+    import pandas as pd
+    import streamlit as st
+
     try:
         engine = conectar()
 
         df = pd.read_excel(arquivo_excel)
 
-        # Ajuste nomes colunas para o padrão do banco (sem espaços, acentos)
+        # Mapeamento fiel dos nomes de coluna para o padrão do banco
         rename_cols = {
             'Data Pregão': 'data_pregao',
             'Código BDI': 'codigo_bdi',
             'Código de Negociação': 'codigo_negociacao',
-            'Nome Resumido': 'nome_empresa',
-            'Especificação': 'especificacao_papel',
+            'Tipo de Mercado': 'tipo_mercado',
+            'Nome Resumido': 'nome_resumido',
+            'Especificação': 'especificacao',
+            'Prazo': 'prazo',
+            'Moeda Referência': 'moeda_referencia',
             'Preço Abertura': 'preco_abertura',
             'Preço Máximo': 'preco_maximo',
             'Preço Mínimo': 'preco_minimo',
             'Preço Médio': 'preco_medio',
-            'Preço Último': 'preco_fechamento',
-            'Volume Total': 'volume'
-            # Inclua outras colunas conforme disponíveis
+            'Preço Último': 'preco_ultimo',
+            'Preço Melhor Compra': 'preco_melhor_compra',
+            'Preço Melhor Venda': 'preco_melhor_venda',
+            'Negócios': 'negocios',
+            'Quantidade Total': 'quantidade_total',
+            'Volume Total': 'volume_total',
+            'Preço Exercício': 'preco_exercicio',
+            'Ind. Correção': 'ind_correcao',
+            'Data Vencimento': 'data_vencimento',
+            'Fator Cotação': 'fator_cotacao',
+            'Pontos Exercício': 'pontos_exercicio',
+            'Código ISIN': 'codigo_isin',
+            'Número Distribuição': 'numero_distribuicao'
         }
         df = df.rename(columns=rename_cols)
 
-        # Converter datas no formato correto
+        # Converter datas
         df['data_pregao'] = pd.to_datetime(df['data_pregao'], errors='coerce').dt.date
+        df['data_vencimento'] = pd.to_datetime(df['data_vencimento'], errors='coerce').dt.date
 
-        # Converter campos numéricos para float caso necessário
-        col_precos = ['preco_abertura', 'preco_maximo', 'preco_minimo', 'preco_medio', 'preco_fechamento']
-        for col in col_precos:
-            df[col] = pd.to_numeric(df[col], errors='coerce')
+        # Converter decimais
+        cols_decimal = [
+            'preco_abertura','preco_maximo','preco_minimo','preco_medio','preco_ultimo','preco_melhor_compra',
+            'preco_melhor_venda','volume_total','preco_exercicio','fator_cotacao','pontos_exercicio'
+        ]
+        for col in cols_decimal:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
 
-        df['volume'] = pd.to_numeric(df['volume'], errors='coerce')
+        # Inteiros
+        cols_int = ['negocios','quantidade_total']
+        for col in cols_int:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce', downcast='integer')
 
         nome_tabela = 'historico_precos'
 
-        # Carregar registros existentes para evitar duplicação
-        df_existente = pd.read_sql(f"SELECT data_pregao, codigo_bdi FROM {nome_tabela}", con=engine)
+        # Buscar registros existentes para evitar duplicação
+        df_existente = pd.read_sql(f"SELECT data_pregao, codigo_bdi, codigo_negociacao FROM {nome_tabela}", con=engine)
         df_existente['data_pregao'] = pd.to_datetime(df_existente['data_pregao']).dt.date
 
-        df_novo = df.merge(df_existente, on=['data_pregao', 'codigo_bdi'], how='left', indicator=True)
+        # Identifica registros novos usando as 3 chaves principais
+        df_novo = df.merge(df_existente, on=['data_pregao','codigo_bdi','codigo_negociacao'], how='left', indicator=True)
         df_novo = df_novo[df_novo['_merge'] == 'left_only'].drop(columns=['_merge'])
 
         if not df_novo.empty:
@@ -162,6 +188,7 @@ def importar_historico_precos_excel(arquivo_excel):
     except Exception as e:
         st.error(f"❌ Erro ao importar histórico de preços: {e}")
         raise e
+
 
 
 
