@@ -43,7 +43,7 @@ def render():
         if arquivo is not None:
             if st.button("Importar Histórico de Preços"):
                 try:
-                    importar_historico_precos(arquivo)
+                    importar_historico_precos_excel(arquivo)
                     st.success("Histórico de preços importado com sucesso.")
                 except Exception as e:
                     st.error(f"Erro ao importar histórico: {e}")
