@@ -36,11 +36,8 @@ def atualizar_preco_ativos(engine):
     st.success("Preços atualizados com sucesso.")
 
 def calcular_resultados(engine, df):
-    # Alteração aqui: usa preco_ultimo, não preco_fechamento
-    df_precos = pd.read_sql(
-        text("SELECT codigo_bdi, preco_ultimo, data_pregao FROM historico_precos"),
-        engine
-    )
+    df_precos = pd.read_sql(text("SELECT codigo_bdi, preco_ultimo, data_pregao FROM historico_precos"), engine)
+    df_precos['codigo_bdi'] = df_precos['codigo_bdi'].str.strip().str.upper()
     df = df.copy()
     for col in ['preco_ultimo', 'resultado']:
         if col not in df.columns:
@@ -52,7 +49,7 @@ def calcular_resultados(engine, df):
         if pd.notna(row.get('preco_ultimo')) and pd.notna(row.get('resultado')):
             continue
 
-        ativo = row['Ativo']
+        ativo = str(row['Ativo']).strip().upper()
         vencimento = row['Data_Vencimento']
         st.write(f"Processando Ativo: {ativo}, Vencimento: {vencimento}")
 
@@ -97,11 +94,7 @@ def calcular_resultados(engine, df):
                     UPDATE operacoes_estruturadas
                     SET preco_ultimo = :preco, resultado = :resultado
                     WHERE id = :id
-                """), {
-                    'preco': atualizacao['preco_ultimo'],
-                    'resultado': atualizacao['resultado'],
-                    'id': atualizacao['id']
-                })
+                """), {'preco': atualizacao['preco_ultimo'], 'resultado': atualizacao['resultado'], 'id': atualizacao['id']})
 
     st.success(f"Foram atualizados {len(atualizacoes)} registros.")
     return df
