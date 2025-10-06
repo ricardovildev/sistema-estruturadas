@@ -56,6 +56,10 @@ def render():
         if falhas:
             st.warning(f"⚠️ Falha ao atualizar os seguintes ativos: {', '.join(falhas)}")
 
+    # 🔁 Chama a função que atualiza ativos_livres com base nos dados atualizados
+    atualizar_preco_atual_ativos_livres()
+
+
     # Conectar e carregar dados
     df = pd.read_sql("SELECT * FROM ativos_livres", con=engine)
 
