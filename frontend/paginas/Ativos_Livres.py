@@ -25,22 +25,18 @@ def render():
 
     st.write("Aqui você pode atualizar os preços dos ativos cadastrados.")
 
-
     if st.button("🔄 Atualizar todos os preços"):
         df_assets = obter_lista_assets(engine)
         atualizados = 0
         falhas = []
 
-
         progress_bar = st.progress(0)
         status_text = st.empty()
-
 
         for i, row in df_assets.iterrows():
             ticker_yahoo = row['asset_original'].strip().upper() + ".SA"
             status_text.text(f"🔍 Atualizando {row['asset_original']}...")
             preco = obter_preco_ultimo(ticker_yahoo)
-
 
             if preco is not None:
                 atualizar_preco(engine, row['asset_original'], preco)
@@ -48,29 +44,22 @@ def render():
             else:
                 falhas.append(row['asset_original'])
 
-
             progress_bar.progress((i + 1) / len(df_assets))
-        # ✅ Após atualizar os preços na tabela ativos_yahoo, sincroniza com ativos_livres
+
+        # ✅ Atualiza ativos_livres com os dados da tabela ativos_yahoo
         atualizar_preco_atual_ativos_livres()
-
-                    
-
 
         st.success(f"✅ {atualizados} ativos atualizados com sucesso.")
         if falhas:
             st.warning(f"⚠️ Falha ao atualizar os seguintes ativos: {', '.join(falhas)}")
 
-    
-
-
-
-    # Agrupamento de filtros
+    # 🔍 Filtros
     st.markdown("### 🔍 Filtros de Identificação")
     col1, col2, col3, col4 = st.columns(4)
     cliente_busca = col1.text_input("Buscar Cliente")
-    ativo_sel = col2.selectbox("Ativo", ["Todos"] + sorted(df['Ativo'].dropna().unique()))
+    ativo_sel = col2.selectbox("Ativo", ["Todos"])
     assessor_sel = col3.text_input("Buscar por Assessor")
-    mesa_sel = col4.selectbox("Mesa", ["Todos"] + sorted(df['Mesa'].dropna().unique()))
+    mesa_sel = col4.selectbox("Mesa", ["Todos"])
 
     st.markdown("---")
 
@@ -79,22 +68,25 @@ def render():
     qtde_minima = col5.number_input("Qtde Livre mínima", min_value=0, value=0)
     volume_minimo = col6.number_input("Volume Livre mínima", min_value=0.0, value=0.0)
 
-    # Botão para aplicar filtro
-    
     if st.button("Aplicar filtro"):
-        # Conectar e carregar dados
+        # 🔄 Recarrega os dados atualizados do banco
         df = pd.read_sql("SELECT * FROM ativos_livres", con=engine)
 
         if df.empty:
             st.warning("Nenhum dado encontrado.")
-        return
+            return
+
+        # Atualiza opções de filtros dinâmicos
+        ativo_sel = col2.selectbox("Ativo", ["Todos"] + sorted(df['Ativo'].dropna().unique()))
+        mesa_sel = col4.selectbox("Mesa", ["Todos"] + sorted(df['Mesa'].dropna().unique()))
+
         # Aplicar filtros
         df_filtrado = df.copy()
         if cliente_busca:
             df_filtrado = df_filtrado[df_filtrado['Cliente'].str.contains(cliente_busca, case=False, na=False)]
         if ativo_sel != "Todos":
             df_filtrado = df_filtrado[df_filtrado['Ativo'] == ativo_sel]
-        if assessor_sel != "Todos":
+        if assessor_sel:
             df_filtrado = df_filtrado[df_filtrado['Assessor'].str.contains(assessor_sel, case=False, na=False)]
         if mesa_sel != "Todos":
             df_filtrado = df_filtrado[df_filtrado['Mesa'] == mesa_sel]
