@@ -611,12 +611,12 @@ def importar_ativos_livres(arquivo, engine):
 
 def atualizar_preco_atual_ativos_livres():
     
-    etapas = [
+   """ etapas = [
         "Atualizando preços dos ativos...",
         "Calculando rentabilidade válida...",
         "Zerando rentabilidade inválida...",
         "Calculando volume livre..."
-    ]
+    ] """
 
     progress_bar = st.progress(0)
     status_text = st.empty()
