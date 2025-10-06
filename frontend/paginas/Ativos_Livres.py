@@ -46,18 +46,9 @@ def render():
 
             progress_bar.progress((i + 1) / len(df_assets))
 
-        atualizar_preco_atual_ativos_livres()
-
         st.success(f"✅ {atualizados} ativos atualizados com sucesso.")
         if falhas:
             st.warning(f"⚠️ Falha ao atualizar os seguintes ativos: {', '.join(falhas)}")
-
-    # 🔄 Carrega dados atualizados do banco
-    df = pd.read_sql("SELECT * FROM ativos_livres", con=engine)
-
-    if df.empty:
-        st.warning("Nenhum dado encontrado.")
-        return
 
     # Filtros de Identificação
     st.markdown("### 🔍 Filtros de Identificação")
@@ -76,55 +67,69 @@ def render():
     volume_minimo = col6.number_input("Volume Livre mínima", min_value=0.0, value=0.0)
 
     if st.button("Aplicar filtro"):
-        df_filtrado = df.copy()
-        if cliente_busca:
-            df_filtrado = df_filtrado[df_filtrado['Cliente'].str.contains(cliente_busca, case=False, na=False)]
-        if ativo_sel != "Todos":
-            df_filtrado = df_filtrado[df_filtrado['Ativo'] == ativo_sel]
-        if assessor_sel:
-            df_filtrado = df_filtrado[df_filtrado['Assessor'].str.contains(assessor_sel, case=False, na=False)]
-        if mesa_sel != "Todos":
-            df_filtrado = df_filtrado[df_filtrado['Mesa'] == mesa_sel]
-        df_filtrado = df_filtrado[df_filtrado['Qtde_Livre'].fillna(0) > qtde_minima]
-        df_filtrado = df_filtrado[df_filtrado['Volume_Livre'].fillna(0) > volume_minimo]
+    # 🔄 Atualiza os dados da tabela ativos_livres com base na ativos_yahoo
+    atualizar_preco_atual_ativos_livres()
 
-        volume_total = df_filtrado['Volume_Livre'].sum(skipna=True)
-        st.metric(label="💰 Volume Livre Total (filtrado)", value=f"R$ {volume_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+    # 🔄 Recarrega os dados atualizados do banco
+    df = pd.read_sql("SELECT * FROM ativos_livres", con=engine)
 
-        df_filtrado = df_filtrado.sort_values(by='Volume_Livre', ascending=False, na_position='last')
+    if df.empty:
+        st.warning("Nenhum dado encontrado.")
+        return
 
-        def format_brl(x):
-            return f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    # Aplicar filtros
+    df_filtrado = df.copy()
+    if cliente_busca:
+        df_filtrado = df_filtrado[df_filtrado['Cliente'].str.contains(cliente_busca, case=False, na=False)]
+    if ativo_sel != "Todos":
+        df_filtrado = df_filtrado[df_filtrado['Ativo'] == ativo_sel]
+    if assessor_sel:
+        df_filtrado = df_filtrado[df_filtrado['Assessor'].str.contains(assessor_sel, case=False, na=False)]
+    if mesa_sel != "Todos":
+        df_filtrado = df_filtrado[df_filtrado['Mesa'] == mesa_sel]
+    df_filtrado = df_filtrado[df_filtrado['Qtde_Livre'].fillna(0) > qtde_minima]
+    df_filtrado = df_filtrado[df_filtrado['Volume_Livre'].fillna(0) > volume_minimo]
 
-        def format_pct(x):
-            return f"{x:.2f} %".replace(".", ",")
+    # Calcular soma do Volume Livre filtrado
+    volume_total = df_filtrado['Volume_Livre'].sum(skipna=True)
+    st.metric(label="💰 Volume Livre Total (filtrado)", value=f"R$ {volume_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
 
-        df_formatado = df_filtrado.copy()
-        df_formatado['Preco_Medio'] = df_formatado['Preco_Medio'].apply(format_brl)
-        df_formatado['Preco_Atual'] = df_formatado['Preco_Atual'].apply(format_brl)
-        df_formatado['Volume_Livre'] = df_formatado['Volume_Livre'].apply(format_brl)
-        df_formatado['Rentabilidade'] = df_formatado['Rentabilidade'].apply(format_pct)
+    df_filtrado = df_filtrado.sort_values(by='Volume_Livre', ascending=False, na_position='last')
 
-        colunas_exibir = ['Conta', 'Cliente', 'Ativo', 'Assessor', 'Qtde_Total', 'Qtde_Livre',
-                          'Preco_Medio', 'Preco_Atual', 'Volume_Livre', 'Rentabilidade']
+    # Formatação
+    def format_brl(x):
+        return f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
-        nomes_personalizados = {
-            'Conta': 'Conta',
-            'Cliente': 'Cliente',
-            'Ativo': 'Ativo',
-            'Assessor': 'Assessor',
-            'Qtde_Total': 'Quantidade Total',
-            'Qtde_Livre': 'Quantidade Livre',
-            'Preco_Medio': 'Preço Médio',
-            'Preco_Atual': 'Preço Atual',
-            'Volume_Livre': 'Volume Livre',
-            'Rentabilidade': 'Rentabilidade'
-        }
+    def format_pct(x):
+        return f"{x:.2f} %".replace(".", ",")
 
-        df_final = df_formatado[colunas_exibir].rename(columns=nomes_personalizados)
+    df_formatado = df_filtrado.copy()
+    df_formatado['Preco_Medio'] = df_formatado['Preco_Medio'].apply(format_brl)
+    df_formatado['Preco_Atual'] = df_formatado['Preco_Atual'].apply(format_brl)
+    df_formatado['Volume_Livre'] = df_formatado['Volume_Livre'].apply(format_brl)
+    df_formatado['Rentabilidade'] = df_formatado['Rentabilidade'].apply(format_pct)
 
-        st.markdown("---")
-        st.subheader("📋 Tabela de Ativos Formatada")
-        st.dataframe(df_final, use_container_width=True)
+    # Seleção de colunas e renomeação
+    colunas_exibir = ['Conta', 'Cliente', 'Ativo', 'Assessor', 'Qtde_Total', 'Qtde_Livre',
+                      'Preco_Medio', 'Preco_Atual', 'Volume_Livre', 'Rentabilidade']
 
-        st.caption(f"🔎 {len(df_final)} ativos encontrados com os filtros aplicados.")
+    nomes_personalizados = {
+        'Conta': 'Conta',
+        'Cliente': 'Cliente',
+        'Ativo': 'Ativo',
+        'Assessor': 'Assessor',
+        'Qtde_Total': 'Quantidade Total',
+        'Qtde_Livre': 'Quantidade Livre',
+        'Preco_Medio': 'Preço Médio',
+        'Preco_Atual': 'Preço Atual',
+        'Volume_Livre': 'Volume Livre',
+        'Rentabilidade': 'Rentabilidade'
+    }
+
+    df_final = df_formatado[colunas_exibir].rename(columns=nomes_personalizados)
+
+    st.markdown("---")
+    st.subheader("📋 Tabela de Ativos Formatada")
+    st.dataframe(df_final, use_container_width=True)
+
+    st.caption(f"🔎 {len(df_final)} ativos encontrados com os filtros aplicados.")
