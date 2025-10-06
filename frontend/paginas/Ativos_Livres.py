@@ -46,41 +46,36 @@ def render():
 
             progress_bar.progress((i + 1) / len(df_assets))
 
-        # ✅ Atualiza ativos_livres com os dados da tabela ativos_yahoo
         atualizar_preco_atual_ativos_livres()
 
         st.success(f"✅ {atualizados} ativos atualizados com sucesso.")
         if falhas:
             st.warning(f"⚠️ Falha ao atualizar os seguintes ativos: {', '.join(falhas)}")
 
-    # 🔍 Filtros
+    # 🔄 Carrega dados atualizados do banco
+    df = pd.read_sql("SELECT * FROM ativos_livres", con=engine)
+
+    if df.empty:
+        st.warning("Nenhum dado encontrado.")
+        return
+
+    # Filtros de Identificação
     st.markdown("### 🔍 Filtros de Identificação")
     col1, col2, col3, col4 = st.columns(4)
     cliente_busca = col1.text_input("Buscar Cliente")
-    ativo_sel = col2.selectbox("Ativo", ["Todos"])
+    ativo_sel = col2.selectbox("Ativo", ["Todos"] + sorted(df['Ativo'].dropna().unique()))
     assessor_sel = col3.text_input("Buscar por Assessor")
-    mesa_sel = col4.selectbox("Mesa", ["Todos"])
+    mesa_sel = col4.selectbox("Mesa", ["Todos"] + sorted(df['Mesa'].dropna().unique()))
 
     st.markdown("---")
 
+    # Filtros Numéricos
     st.markdown("### 📦 Filtros Numéricos")
     col5, col6 = st.columns(2)
     qtde_minima = col5.number_input("Qtde Livre mínima", min_value=0, value=0)
     volume_minimo = col6.number_input("Volume Livre mínima", min_value=0.0, value=0.0)
 
     if st.button("Aplicar filtro"):
-        # 🔄 Recarrega os dados atualizados do banco
-        df = pd.read_sql("SELECT * FROM ativos_livres", con=engine)
-
-        if df.empty:
-            st.warning("Nenhum dado encontrado.")
-            return
-
-        # Atualiza opções de filtros dinâmicos
-        ativo_sel = col2.selectbox("Ativo", ["Todos"] + sorted(df['Ativo'].dropna().unique()))
-        mesa_sel = col4.selectbox("Mesa", ["Todos"] + sorted(df['Mesa'].dropna().unique()))
-
-        # Aplicar filtros
         df_filtrado = df.copy()
         if cliente_busca:
             df_filtrado = df_filtrado[df_filtrado['Cliente'].str.contains(cliente_busca, case=False, na=False)]
@@ -93,15 +88,11 @@ def render():
         df_filtrado = df_filtrado[df_filtrado['Qtde_Livre'].fillna(0) > qtde_minima]
         df_filtrado = df_filtrado[df_filtrado['Volume_Livre'].fillna(0) > volume_minimo]
 
-        # Calcular soma do Volume Livre filtrado
         volume_total = df_filtrado['Volume_Livre'].sum(skipna=True)
-
-        # Exibir como métrica no topo
         st.metric(label="💰 Volume Livre Total (filtrado)", value=f"R$ {volume_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
 
         df_filtrado = df_filtrado.sort_values(by='Volume_Livre', ascending=False, na_position='last')
 
-        # Formatação
         def format_brl(x):
             return f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
@@ -114,7 +105,6 @@ def render():
         df_formatado['Volume_Livre'] = df_formatado['Volume_Livre'].apply(format_brl)
         df_formatado['Rentabilidade'] = df_formatado['Rentabilidade'].apply(format_pct)
 
-        # Seleção de colunas e renomeação
         colunas_exibir = ['Conta', 'Cliente', 'Ativo', 'Assessor', 'Qtde_Total', 'Qtde_Livre',
                           'Preco_Medio', 'Preco_Atual', 'Volume_Livre', 'Rentabilidade']
 
