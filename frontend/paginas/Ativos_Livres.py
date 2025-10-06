@@ -62,12 +62,7 @@ def render():
 
     
 
-    # Conectar e carregar dados
-    df = pd.read_sql("SELECT * FROM ativos_livres", con=engine)
 
-    if df.empty:
-        st.warning("Nenhum dado encontrado.")
-        return
 
     # Agrupamento de filtros
     st.markdown("### 🔍 Filtros de Identificação")
@@ -85,7 +80,14 @@ def render():
     volume_minimo = col6.number_input("Volume Livre mínima", min_value=0.0, value=0.0)
 
     # Botão para aplicar filtro
+    
     if st.button("Aplicar filtro"):
+        # Conectar e carregar dados
+        df = pd.read_sql("SELECT * FROM ativos_livres", con=engine)
+
+        if df.empty:
+            st.warning("Nenhum dado encontrado.")
+        return
         # Aplicar filtros
         df_filtrado = df.copy()
         if cliente_busca:
