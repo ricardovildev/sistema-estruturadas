@@ -50,33 +50,10 @@ def render():
 
 
             progress_bar.progress((i + 1) / len(df_assets))
+        # ✅ Após atualizar os preços na tabela ativos_yahoo, sincroniza com ativos_livres
+        atualizar_preco_atual_ativos_livres()
 
-                    conn.execute(text("""
-                    UPDATE ativos_livres AS al
-                    JOIN ativos_yahoo AS ay ON UPPER(TRIM(al.Ativo)) = UPPER(TRIM(ay.asset_original))
-                    SET al.Preco_Atual = ay.Preco_Atual
-                """))
-
-                # Calcular Rentabilidade apenas quando Preco_Medio é válido
-                conn.execute(text("""
-                    UPDATE ativos_livres
-                    SET Rentabilidade = ROUND(((Preco_Atual - Preco_Medio) / Preco_Medio) * 100, 2)
-                    WHERE Preco_Medio IS NOT NULL AND Preco_Medio > 0
-                """))
-
-                # Zerar Rentabilidade onde Preco_Medio é inválido
-                conn.execute(text("""
-                    UPDATE ativos_livres
-                    SET Rentabilidade = NULL
-                    WHERE Preco_Medio IS NULL OR Preco_Medio = 0
-                """))
-
-                # Calcular o volume livre
-                conn.execute(text("""
-                    UPDATE ativos_livres
-                    SET Volume_Livre = ROUND(Qtde_livre * Preco_Atual, 2)
-                    WHERE Qtde_livre IS NOT NULL AND Preco_Atual IS NOT NULL
-                """))
+                    
 
 
         st.success(f"✅ {atualizados} ativos atualizados com sucesso.")
