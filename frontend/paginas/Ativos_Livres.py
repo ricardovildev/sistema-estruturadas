@@ -26,7 +26,7 @@ def render():
     st.write("Aqui você pode atualizar os preços dos ativos cadastrados.")
 
 
-    if st.button("🔄 Atualizar todos os preços"):
+    if st.button("🔄 Buscar preços yahoo"):
         df_assets = obter_lista_assets(engine)
         atualizados = 0
         falhas = []
@@ -61,7 +61,7 @@ def render():
    
 
     # Conectar e carregar dados
-    atualizar_preco_atual_ativos_livres()
+    
     df = pd.read_sql("SELECT * FROM ativos_livres", con=engine)
 
     if df.empty:
@@ -146,5 +146,6 @@ def render():
         st.dataframe(df_final, use_container_width=True)
 
         st.caption(f"🔎 {len(df_final)} ativos encontrados com os filtros aplicados.")
-        #if st.button("Atualizar Preço Atual da Tabela"):
         
+    if st.button("Atualizar Preço Atual da Tabela"):
+        atualizar_preco_atual_ativos_livres()    
