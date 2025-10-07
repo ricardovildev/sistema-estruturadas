@@ -53,7 +53,7 @@ def render():
 
             
         st.success(f"✅ {atualizados} ativos atualizados com sucesso.")
-                atualizar_preco_atual_ativos_livres()
+   atualizar_preco_atual_ativos_livres()             
         if falhas:
             st.warning(f"⚠️ Falha ao atualizar os seguintes ativos: {', '.join(falhas)}")
 
