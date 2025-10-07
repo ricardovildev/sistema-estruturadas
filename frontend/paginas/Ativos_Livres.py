@@ -51,7 +51,7 @@ def render():
             st.warning(f"⚠️ Falha ao atualizar os seguintes ativos: {', '.join(falhas)}")
 
     if st.button("🧪 Testar atualização de preços em ativos_livres"):
-    atualizar_preco_atual_ativos_livres()
+        atualizar_preco_atual_ativos_livres()
 
     # Filtros de Identificação
     st.markdown("### 🔍 Filtros de Identificação")
