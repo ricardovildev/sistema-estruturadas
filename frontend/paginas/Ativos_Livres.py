@@ -68,7 +68,7 @@ def render():
 
     # 🚫 Filtro de contas a excluir
     st.markdown("### 🚫 Contas a excluir")
-    contas_excluir_input = st.text_area("Códigos de contas separadas por vírgula", "", height=10, width=800)
+    contas_excluir_input = st.text_area("Códigos de contas separadas por vírgula", "", height=-10, width=400)
     contas_excluir = [c.strip() for c in contas_excluir_input.split(",") if c.strip()]
 
     st.markdown("---")
