@@ -80,8 +80,7 @@ def render():
     qtde_minima = col5.number_input("Qtde Livre mínima", min_value=0, value=0)
     volume_minimo = col6.number_input("Volume Livre mínima", min_value=0.0, value=0.0)
 
-    if st.button("Atualizar Preço Atual da Tabela"):
-        atualizar_preco_atual_ativos_livres()
+
 
     # Botão para aplicar filtro
     if st.button("Aplicar filtro"):
@@ -144,3 +143,6 @@ def render():
         st.dataframe(df_final, use_container_width=True)
 
         st.caption(f"🔎 {len(df_final)} ativos encontrados com os filtros aplicados.")
+
+        if st.button("Atualizar Preço Atual da Tabela"):
+            atualizar_preco_atual_ativos_livres()
