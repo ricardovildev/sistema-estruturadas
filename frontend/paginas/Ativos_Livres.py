@@ -74,6 +74,8 @@ def render():
     col5, col6 = st.columns(2)
     qtde_minima = col5.number_input("Qtde Livre mínima", min_value=0, value=0)
     volume_minimo = col6.number_input("Volume Livre mínima", min_value=0.0, value=0.0)
+    rentabilidade_minima = col7.number_input("Rentabilidade Maior que", min_value=0.0, value=0.0)
+    
 
 
 
@@ -92,7 +94,8 @@ def render():
             df_filtrado = df_filtrado[df_filtrado['Mesa'] == mesa_sel]
         df_filtrado = df_filtrado[df_filtrado['Qtde_Livre'].fillna(0) > qtde_minima]
         df_filtrado = df_filtrado[df_filtrado['Volume_Livre'].fillna(0) > volume_minimo]
-
+        df_filtrado = df_filtrado[df_filtrado['Rentabilidade'].fillna(0) > rentabilidade_minima]
+        
         # Calcular soma do Volume Livre filtrado
         volume_total = df_filtrado['Volume_Livre'].sum(skipna=True)
 
