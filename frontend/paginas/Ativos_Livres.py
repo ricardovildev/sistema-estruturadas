@@ -68,6 +68,10 @@ def render():
     assessor_sel = col3.text_input("Buscar por Assessor")
     mesa_sel = col4.selectbox("Mesa", ["Todos"] + sorted(df['Mesa'].dropna().unique()))
 
+    st.markdown("### 🚫 Contas a excluir")
+    contas_excluir_input = st.text_area("Códigos de contas separadas por vírgula", "")
+    contas_excluir = [c.strip() for c in contas_excluir_input.split(",") if c.strip()]
+
     st.markdown("---")
 
     st.markdown("### 📦 Filtros Numéricos")
@@ -95,6 +99,9 @@ def render():
         df_filtrado = df_filtrado[df_filtrado['Qtde_Livre'].fillna(0) > qtde_minima]
         df_filtrado = df_filtrado[df_filtrado['Volume_Livre'].fillna(0) > volume_minimo]
         df_filtrado = df_filtrado[df_filtrado['Rentabilidade'].fillna(0) > rentabilidade_minima]
+
+        if contas_excluir:
+        df_filtrado = df_filtrado[~df_filtrado['Conta'].isin(contas_excluir)]
         
         # Calcular soma do Volume Livre filtrado
         volume_total = df_filtrado['Volume_Livre'].sum(skipna=True)
