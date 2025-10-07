@@ -143,5 +143,5 @@ def render():
 
         st.caption(f"🔎 {len(df_final)} ativos encontrados com os filtros aplicados.")
 
-    if st.button("🧪 Testar atualização de preços em ativos_livres"):
+    if st.button("Atualizar Preço Atual da Tabela"):
         atualizar_preco_atual_ativos_livres()
