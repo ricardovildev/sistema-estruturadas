@@ -74,7 +74,7 @@ def render():
     col5, col6, col7 = st.columns(3)
     qtde_minima = col5.number_input("Qtde Livre mínima", min_value=0, value=0)
     volume_minimo = col6.number_input("Volume Livre mínima", min_value=0.0, value=0.0)
-    rentabilidade_minima = col7.number_input("Rentabilidade Maior que", min_value=0.0, value=0.0)
+    rentabilidade_minima = col7.number_input("Rentabilidade Maior que", min_value=-100, value=0.0)
     
 
 
