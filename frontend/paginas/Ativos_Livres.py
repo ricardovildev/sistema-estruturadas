@@ -31,16 +31,13 @@ def render():
         atualizados = 0
         falhas = []
 
-
         progress_bar = st.progress(0)
         status_text = st.empty()
-
 
         for i, row in df_assets.iterrows():
             ticker_yahoo = row['asset_original'].strip().upper() + ".SA"
             status_text.text(f"🔍 Atualizando {row['asset_original']}...")
             preco = obter_preco_ultimo(ticker_yahoo)
-
 
             if preco is not None:
                 atualizar_preco(engine, row['asset_original'], preco)
@@ -48,17 +45,12 @@ def render():
             else:
                 falhas.append(row['asset_original'])
 
-
             progress_bar.progress((i + 1) / len(df_assets))
-
-            
+           
         st.success(f"✅ {atualizados} ativos atualizados com sucesso.")
-        
         if falhas:
             st.warning(f"⚠️ Falha ao atualizar os seguintes ativos: {', '.join(falhas)}")
-
-           
-   
+ 
 
     # Conectar e carregar dados
     
@@ -146,6 +138,3 @@ def render():
         st.dataframe(df_final, use_container_width=True)
 
         st.caption(f"🔎 {len(df_final)} ativos encontrados com os filtros aplicados.")
-        
-    if st.button("Atualizar Preço Atual da Tabela"):
-        atualizar_preco_atual_ativos_livres()    
