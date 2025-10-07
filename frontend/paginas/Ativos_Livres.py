@@ -57,7 +57,7 @@ def render():
         if falhas:
             st.warning(f"⚠️ Falha ao atualizar os seguintes ativos: {', '.join(falhas)}")
 
-    atualizar_preco_atual_ativos_livres()   
+        atualizar_preco_atual_ativos_livres()   
    
 
     # Conectar e carregar dados
