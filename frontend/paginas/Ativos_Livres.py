@@ -51,10 +51,14 @@ def render():
 
             progress_bar.progress((i + 1) / len(df_assets))
 
+            atualizar_preco_atual_ativos_livres()
+
 
         st.success(f"✅ {atualizados} ativos atualizados com sucesso.")
         if falhas:
             st.warning(f"⚠️ Falha ao atualizar os seguintes ativos: {', '.join(falhas)}")
+
+     
 
     # Conectar e carregar dados
     df = pd.read_sql("SELECT * FROM ativos_livres", con=engine)
@@ -80,8 +84,6 @@ def render():
 
     # Botão para aplicar filtro
     if st.button("Aplicar filtro"):
-
-        atualizar_preco_atual_ativos_livres()
 
         # Aplicar filtros
         df_filtrado = df.copy()
