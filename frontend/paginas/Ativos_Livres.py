@@ -25,6 +25,7 @@ def render():
 
     st.write("Aqui você pode atualizar os preços dos ativos cadastrados.")
 
+    # 🔄 Botão para atualizar preços na tabela ativos_yahoo
     if st.button("🔄 Atualizar todos os preços"):
         df_assets = obter_lista_assets(engine)
         atualizados = 0
@@ -50,89 +51,85 @@ def render():
         if falhas:
             st.warning(f"⚠️ Falha ao atualizar os seguintes ativos: {', '.join(falhas)}")
 
+    # 🧪 Botão de teste para atualizar ativos_livres diretamente
     if st.button("🧪 Testar atualização de preços em ativos_livres"):
         atualizar_preco_atual_ativos_livres()
 
-    # Filtros de Identificação
+    # 🔍 Filtros de Identificação
     st.markdown("### 🔍 Filtros de Identificação")
+    df_base = pd.read_sql("SELECT * FROM ativos_livres", con=engine)
     col1, col2, col3, col4 = st.columns(4)
     cliente_busca = col1.text_input("Buscar Cliente")
-    ativo_sel = col2.selectbox("Ativo", ["Todos"] + sorted(df['Ativo'].dropna().unique()))
+    ativo_sel = col2.selectbox("Ativo", ["Todos"] + sorted(df_base['Ativo'].dropna().unique()))
     assessor_sel = col3.text_input("Buscar por Assessor")
-    mesa_sel = col4.selectbox("Mesa", ["Todos"] + sorted(df['Mesa'].dropna().unique()))
+    mesa_sel = col4.selectbox("Mesa", ["Todos"] + sorted(df_base['Mesa'].dropna().unique()))
 
     st.markdown("---")
 
-    # Filtros Numéricos
+    # 📦 Filtros Numéricos
     st.markdown("### 📦 Filtros Numéricos")
     col5, col6 = st.columns(2)
     qtde_minima = col5.number_input("Qtde Livre mínima", min_value=0, value=0)
     volume_minimo = col6.number_input("Volume Livre mínima", min_value=0.0, value=0.0)
 
+    # 🎯 Botão para aplicar filtro
     if st.button("Aplicar filtro"):
-    # 🔄 Atualiza os dados da tabela ativos_livres com base na ativos_yahoo
-    atualizar_preco_atual_ativos_livres()
+        atualizar_preco_atual_ativos_livres()
+        df = pd.read_sql("SELECT * FROM ativos_livres", con=engine)
 
-    # 🔄 Recarrega os dados atualizados do banco
-    df = pd.read_sql("SELECT * FROM ativos_livres", con=engine)
+        if df.empty:
+            st.warning("Nenhum dado encontrado.")
+            return
 
-    if df.empty:
-        st.warning("Nenhum dado encontrado.")
-        return
+        df_filtrado = df.copy()
+        if cliente_busca:
+            df_filtrado = df_filtrado[df_filtrado['Cliente'].str.contains(cliente_busca, case=False, na=False)]
+        if ativo_sel != "Todos":
+            df_filtrado = df_filtrado[df_filtrado['Ativo'] == ativo_sel]
+        if assessor_sel:
+            df_filtrado = df_filtrado[df_filtrado['Assessor'].str.contains(assessor_sel, case=False, na=False)]
+        if mesa_sel != "Todos":
+            df_filtrado = df_filtrado[df_filtrado['Mesa'] == mesa_sel]
+        df_filtrado = df_filtrado[df_filtrado['Qtde_Livre'].fillna(0) > qtde_minima]
+        df_filtrado = df_filtrado[df_filtrado['Volume_Livre'].fillna(0) > volume_minimo]
 
-    # Aplicar filtros
-    df_filtrado = df.copy()
-    if cliente_busca:
-        df_filtrado = df_filtrado[df_filtrado['Cliente'].str.contains(cliente_busca, case=False, na=False)]
-    if ativo_sel != "Todos":
-        df_filtrado = df_filtrado[df_filtrado['Ativo'] == ativo_sel]
-    if assessor_sel:
-        df_filtrado = df_filtrado[df_filtrado['Assessor'].str.contains(assessor_sel, case=False, na=False)]
-    if mesa_sel != "Todos":
-        df_filtrado = df_filtrado[df_filtrado['Mesa'] == mesa_sel]
-    df_filtrado = df_filtrado[df_filtrado['Qtde_Livre'].fillna(0) > qtde_minima]
-    df_filtrado = df_filtrado[df_filtrado['Volume_Livre'].fillna(0) > volume_minimo]
+        volume_total = df_filtrado['Volume_Livre'].sum(skipna=True)
+        st.metric(label="💰 Volume Livre Total (filtrado)", value=f"R$ {volume_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
 
-    # Calcular soma do Volume Livre filtrado
-    volume_total = df_filtrado['Volume_Livre'].sum(skipna=True)
-    st.metric(label="💰 Volume Livre Total (filtrado)", value=f"R$ {volume_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        df_filtrado = df_filtrado.sort_values(by='Volume_Livre', ascending=False, na_position='last')
 
-    df_filtrado = df_filtrado.sort_values(by='Volume_Livre', ascending=False, na_position='last')
+        def format_brl(x):
+            return f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
-    # Formatação
-    def format_brl(x):
-        return f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        def format_pct(x):
+            return f"{x:.2f} %".replace(".", ",")
 
-    def format_pct(x):
-        return f"{x:.2f} %".replace(".", ",")
+        df_formatado = df_filtrado.copy()
+        df_formatado['Preco_Medio'] = df_formatado['Preco_Medio'].apply(format_brl)
+        df_formatado['Preco_Atual'] = df_formatado['Preco_Atual'].apply(format_brl)
+        df_formatado['Volume_Livre'] = df_formatado['Volume_Livre'].apply(format_brl)
+        df_formatado['Rentabilidade'] = df_formatado['Rentabilidade'].apply(format_pct)
 
-    df_formatado = df_filtrado.copy()
-    df_formatado['Preco_Medio'] = df_formatado['Preco_Medio'].apply(format_brl)
-    df_formatado['Preco_Atual'] = df_formatado['Preco_Atual'].apply(format_brl)
-    df_formatado['Volume_Livre'] = df_formatado['Volume_Livre'].apply(format_brl)
-    df_formatado['Rentabilidade'] = df_formatado['Rentabilidade'].apply(format_pct)
+        colunas_exibir = ['Conta', 'Cliente', 'Ativo', 'Assessor', 'Qtde_Total', 'Qtde_Livre',
+                          'Preco_Medio', 'Preco_Atual', 'Volume_Livre', 'Rentabilidade']
 
-    # Seleção de colunas e renomeação
-    colunas_exibir = ['Conta', 'Cliente', 'Ativo', 'Assessor', 'Qtde_Total', 'Qtde_Livre',
-                      'Preco_Medio', 'Preco_Atual', 'Volume_Livre', 'Rentabilidade']
+        nomes_personalizados = {
+            'Conta': 'Conta',
+            'Cliente': 'Cliente',
+            'Ativo': 'Ativo',
+            'Assessor': 'Assessor',
+            'Qtde_Total': 'Quantidade Total',
+            'Qtde_Livre': 'Quantidade Livre',
+            'Preco_Medio': 'Preço Médio',
+            'Preco_Atual': 'Preço Atual',
+            'Volume_Livre': 'Volume Livre',
+            'Rentabilidade': 'Rentabilidade'
+        }
 
-    nomes_personalizados = {
-        'Conta': 'Conta',
-        'Cliente': 'Cliente',
-        'Ativo': 'Ativo',
-        'Assessor': 'Assessor',
-        'Qtde_Total': 'Quantidade Total',
-        'Qtde_Livre': 'Quantidade Livre',
-        'Preco_Medio': 'Preço Médio',
-        'Preco_Atual': 'Preço Atual',
-        'Volume_Livre': 'Volume Livre',
-        'Rentabilidade': 'Rentabilidade'
-    }
+        df_final = df_formatado[colunas_exibir].rename(columns=nomes_personalizados)
 
-    df_final = df_formatado[colunas_exibir].rename(columns=nomes_personalizados)
+        st.markdown("---")
+        st.subheader("📋 Tabela de Ativos Formatada")
+        st.dataframe(df_final, use_container_width=True)
 
-    st.markdown("---")
-    st.subheader("📋 Tabela de Ativos Formatada")
-    st.dataframe(df_final, use_container_width=True)
-
-    st.caption(f"🔎 {len(df_final)} ativos encontrados com os filtros aplicados.")
+        st.caption(f"🔎 {len(df_final)} ativos encontrados com os filtros aplicados.")
