@@ -51,9 +51,7 @@ def render():
 
             progress_bar.progress((i + 1) / len(df_assets))
 
-            atualizar_preco_atual_ativos_livres()
-
-
+            
         st.success(f"✅ {atualizados} ativos atualizados com sucesso.")
         if falhas:
             st.warning(f"⚠️ Falha ao atualizar os seguintes ativos: {', '.join(falhas)}")
@@ -81,6 +79,9 @@ def render():
     col5, col6 = st.columns(2)
     qtde_minima = col5.number_input("Qtde Livre mínima", min_value=0, value=0)
     volume_minimo = col6.number_input("Volume Livre mínima", min_value=0.0, value=0.0)
+
+    if st.button("Atualizar Preço Atual da Tabela"):
+        atualizar_preco_atual_ativos_livres()
 
     # Botão para aplicar filtro
     if st.button("Aplicar filtro"):
