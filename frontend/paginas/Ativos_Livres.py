@@ -80,6 +80,9 @@ def render():
 
     # Botão para aplicar filtro
     if st.button("Aplicar filtro"):
+
+        atualizar_preco_atual_ativos_livres()
+
         # Aplicar filtros
         df_filtrado = df.copy()
         if cliente_busca:
