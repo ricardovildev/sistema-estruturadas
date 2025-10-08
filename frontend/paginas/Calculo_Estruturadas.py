@@ -111,10 +111,6 @@ def calcular_resultados(engine, df):
     for idx, row in df.iterrows():
         estrutura_norm = norm_str(row.get('Estrutura', ''))
 
-        # Exatamente "FINANCIAMENTO"
-        if estrutura_norm != 'FINANCIAMENTO':
-            continue
-
         vencimento_raw = row.get('Data_Vencimento')
         if pd.isna(vencimento_raw):
             continue
@@ -132,43 +128,77 @@ def calcular_resultados(engine, df):
         except Exception:
             continue
 
-        # Entradas numéricas
+        # Entradas numéricas base
         quantidade = pd.to_numeric(row.get('Quantidade', 0), errors='coerce') or 0.0
         valor_ativo = pd.to_numeric(row.get('Valor_Ativo', 0), errors='coerce') or 0.0
         custo_unit = pd.to_numeric(row.get('Custo_Unitario_Cliente', 0), errors='coerce') or 0.0
         dividendos = pd.to_numeric(row.get('dividendos', 0), errors='coerce') or 0.0
-        strike_call_vendida = obter_strike_call_vendida_por_flags(row)
 
         quantidade = float(0 if pd.isna(quantidade) else quantidade)
         valor_ativo = float(0 if pd.isna(valor_ativo) else valor_ativo)
         custo_unit = float(0 if pd.isna(custo_unit) else custo_unit)
         dividendos = float(0 if pd.isna(dividendos) else dividendos)
 
-        cupons_premio = quantidade * custo_unit if (quantidade and custo_unit) else 0.0
+        # 1) Financiamento (exatamente)
+        if estrutura_norm == 'FINANCIAMENTO':
+            strike_call_vendida = obter_strike_call_vendida_por_flags(row)
+            cupons_premio = quantidade * custo_unit if (quantidade and custo_unit) else 0.0
 
-        if preco > strike_call_vendida:
-            ajuste = (strike_call_vendida - preco) * quantidade
-            resultado = (preco - valor_ativo + dividendos) * quantidade + ajuste + cupons_premio
-            status = "Ação Vendida"
+            if preco > strike_call_vendida:
+                ajuste = (strike_call_vendida - preco) * quantidade
+                resultado = (preco - valor_ativo + dividendos) * quantidade + ajuste + cupons_premio
+                status = "Ação Vendida"
+            else:
+                ajuste = 0.0
+                resultado = cupons_premio
+                status = "Virando Pó" if vencimento > hoje else "Virou Pó"
+
+            volume = quantidade * preco if (quantidade and preco) else 0.0
+            investido = pd.to_numeric(row.get('investido', quantidade * valor_ativo), errors='coerce')
+            investido = 0.0 if (investido is None or pd.isna(investido)) else float(investido)
+            percentual = (resultado / investido) if investido else None
+
+            atualizacoes.append({
+                'id': row.get('id', None),
+                'resultado': safe_val(resultado),
+                'Ajuste': safe_val(ajuste),
+                'Status': status,
+                'Volume': safe_val(volume),
+                'Cupons_Premio': safe_val(cupons_premio),
+                'percentual': safe_val(percentual)
+            })
+
+        # 2) Financiamento sob custódia (exatamente)
+        elif estrutura_norm == 'FINANCIAMENTO SOB CUSTODIA':
+            strike_call_vendida = obter_strike_call_vendida_por_flags(row)
+            cupons_premio = quantidade * custo_unit if (quantidade and custo_unit) else 0.0
+
+            if preco > strike_call_vendida:
+                ajuste = (strike_call_vendida - preco) * quantidade
+                resultado = (preco - valor_ativo + dividendos) * quantidade + ajuste + cupons_premio
+            else:
+                ajuste = 0.0
+                resultado = cupons_premio
+
+            status = "Ação Livre"
+            volume = 0.0  # sempre zero
+            investido = pd.to_numeric(row.get('investido', quantidade * valor_ativo), errors='coerce')
+            investido = 0.0 if (investido is None or pd.isna(investido)) else float(investido)
+            percentual = (resultado / investido) if investido else None
+
+            atualizacoes.append({
+                'id': row.get('id', None),
+                'resultado': safe_val(resultado),
+                'Ajuste': safe_val(ajuste),
+                'Status': status,
+                'Volume': safe_val(volume),
+                'Cupons_Premio': safe_val(cupons_premio),
+                'percentual': safe_val(percentual)
+            })
+
+        # 3) Demais estruturas: ignorar por enquanto (não calcular)
         else:
-            ajuste = 0.0
-            resultado = cupons_premio
-            status = "Virando Pó" if vencimento > hoje else "Virou Pó"
-
-        volume = quantidade * preco if (quantidade and preco) else 0.0
-        investido = pd.to_numeric(row.get('investido', quantidade * valor_ativo), errors='coerce')
-        investido = 0.0 if (investido is None or pd.isna(investido)) else float(investido)
-        percentual = (resultado / investido) if investido else None
-
-        atualizacoes.append({
-            'id': row.get('id', None),
-            'resultado': safe_val(resultado),
-            'Ajuste': safe_val(ajuste),
-            'Status': status,
-            'Volume': safe_val(volume),
-            'Cupons_Premio': safe_val(cupons_premio),
-            'percentual': safe_val(percentual)
-        })
+            continue
 
     # Persistência
     with engine.begin() as conn:
@@ -187,6 +217,7 @@ def calcular_resultados(engine, df):
 
     st.success(f"Foram atualizados {len(atualizacoes)} registros.")
     return df
+
 
 # =========================
 # UI
