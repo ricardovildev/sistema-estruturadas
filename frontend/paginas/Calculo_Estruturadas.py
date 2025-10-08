@@ -7,7 +7,7 @@ import math
 
 def converter_virgula_para_float(df, colunas):
     for col in colunas:
-        df[col] = df[col].astype(str).str.replace('.', '').str.replace(',', '.').astype(float)
+        df[col] = df[col].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False).astype(float)
     return df
 
 def identificar_opcao(df, seq=1):
@@ -39,22 +39,24 @@ def safe_val(val):
 
 def atualizar_preco_ativos(engine):
     with engine.begin() as conn:
-        # Atualiza preço para vencimentos futuros com join na tabela ativos_yahoo (coluna corrigida para asset_original)
+        # Atualiza preços para vencimentos futuros
         conn.execute(
             text("""
                 UPDATE operacoes_estruturadas oe
-                JOIN ativos_yahoo ay ON UPPER(TRIM(oe.Ativo)) = UPPER(TRIM(ay.asset_original))
+                JOIN ativos_yahoo ay 
+                    ON UPPER(TRIM(oe.Ativo)) = UPPER(TRIM(ay.asset_original))
                 SET oe.preco_atual = ay.preco_atual
                 WHERE oe.Data_Vencimento > CURDATE()
             """)
         )
 
-        # Atualiza preço de fechamento para vencimentos passados com join na tabela historico_precos
+        # Atualiza preços de fechamento para vencimentos passados
         conn.execute(
             text("""
                 UPDATE operacoes_estruturadas oe
-                JOIN historico_precos hp ON UPPER(TRIM(oe.Ativo)) = UPPER(TRIM(hp.codigo_bdi))
-                AND oe.Data_Vencimento = hp.data_pregao
+                JOIN historico_precos hp 
+                    ON UPPER(TRIM(oe.Ativo)) = UPPER(TRIM(hp.codigo_bdi))
+                    AND oe.Data_Vencimento = hp.data_pregao
                 SET oe.preco_fechamento = hp.preco_ultimo
                 WHERE oe.Data_Vencimento <= CURDATE()
             """)
@@ -66,7 +68,7 @@ def calcular_resultados(engine, df):
     df = df.copy()
     atualizacoes = []
 
-    for idx, row in df.iterrows():
+    for _, row in df.iterrows():
         estrutura = str(row.get('Estrutura', '')).strip().upper()
         vencimento_raw = row.get('Data_Vencimento')
         if pd.isna(vencimento_raw):
@@ -123,9 +125,11 @@ def calcular_resultados(engine, df):
             if a['id'] is not None:
                 conn.execute(text("""
                     UPDATE operacoes_estruturadas
-                    SET resultado = :resultado, Ajuste = :Ajuste, Status = :Status, Volume = :Volume, Cupons_Premio = :Cupons_Premio, Percentual = :Percentual
+                    SET resultado = :resultado, Ajuste = :Ajuste, Status = :Status, 
+                        Volume = :Volume, Cupons_Premio = :Cupons_Premio, Percentual = :Percentual
                     WHERE id = :id
                 """), a)
+
     st.success(f"Foram atualizados {len(atualizacoes)} registros.")
     return df
 
@@ -169,42 +173,6 @@ def render():
                 'Valor Ativo': 'Valor_Ativo',
                 'Custo Unitário Cliente': 'Custo_Unitario_Cliente',
                 'Comissão Assessor': 'Comissao_Assessor',
-                'Quantidade Ativa (1)': 'Quantidade_Ativa_1',
-                'Quantidade Boleta (1)': 'Quantidade_Boleta_1',
-                'Tipo (1)': 'Tipo_1',
-                '% do Strike (1)': 'Percentual_Strike_1',
-                'Valor do Strike (1)': 'Valor_Strike_1',
-                '% da Barreira (1)': 'Percentual_Barreira_1',
-                'Valor da Barreira (1)': 'Valor_Barreira_1',
-                'Valor do Rebate (1)': 'Valor_Rebate_1',
-                'Tipo da Barreira (1)': 'Tipo_Barreira_1',
-                'Quantidade Ativa (2)': 'Quantidade_Ativa_2',
-                'Quantidade Boleta (2)': 'Quantidade_Boleta_2',
-                'Tipo (2)': 'Tipo_2',
-                '% do Strike (2)': 'Percentual_Strike_2',
-                'Valor do Strike (2)': 'Valor_Strike_2',
-                '% da Barreira (2)': 'Percentual_Barreira_2',
-                'Valor da Barreira (2)': 'Valor_Barreira_2',
-                'Valor do Rebate (2)': 'Valor_Rebate_2',
-                'Tipo da Barreira (2)': 'Tipo_Barreira_2',
-                'Quantidade Ativa (3)': 'Quantidade_Ativa_3',
-                'Quantidade Boleta (3)': 'Quantidade_Boleta_3',
-                'Tipo (3)': 'Tipo_3',
-                '% do Strike (3)': 'Percentual_Strike_3',
-                'Valor do Strike (3)': 'Valor_Strike_3',
-                '% da Barreira (3)': 'Percentual_Barreira_3',
-                'Valor da Barreira (3)': 'Valor_Barreira_3',
-                'Valor do Rebate (3)': 'Valor_Rebate_3',
-                'Tipo da Barreira (3)': 'Tipo_Barreira_3',
-                'Quantidade Ativa (4)': 'Quantidade_Ativa_4',
-                'Quantidade Boleta (4)': 'Quantidade_Boleta_4',
-                'Tipo (4)': 'Tipo_4',
-                '% do Strike (4)': 'Percentual_Strike_4',
-                'Valor do Strike (4)': 'Valor_Strike_4',
-                '% da Barreira (4)': 'Percentual_Barreira_4',
-                'Valor da Barreira (4)': 'Valor_Barreira_4',
-                'Valor do Rebate (4)': 'Valor_Rebate_4',
-                'Tipo da Barreira (4)': 'Tipo_Barreira_4',
             }
             df = df.rename(columns=renomear_colunas)
 
@@ -217,26 +185,8 @@ def render():
             if 'preco_fechamento' not in df.columns:
                 df['preco_fechamento'] = None
 
-            colunas_tabela = [
-                'Conta', 'Cliente', 'Assessor', 'Codigo_da_Operacao', 'Data_Registro',
-                'Ativo', 'Estrutura', 'Valor_Ativo', 'Data_Vencimento', 'Custo_Unitario_Cliente',
-                'Comissao_Assessor', 'Quantidade_Ativa_1', 'Quantidade_Boleta_1', 'Tipo_1',
-                'Percentual_Strike_1', 'Valor_Strike_1', 'Percentual_Barreira_1', 'Valor_Barreira_1',
-                'Valor_Rebate_1', 'Tipo_Barreira_1', 'Quantidade_Ativa_2', 'Quantidade_Boleta_2', 'Tipo_2',
-                'Percentual_Strike_2', 'Valor_Strike_2', 'Percentual_Barreira_2', 'Valor_Barreira_2',
-                'Valor_Rebate_2', 'Tipo_Barreira_2', 'Quantidade_Ativa_3', 'Quantidade_Boleta_3', 'Tipo_3',
-                'Percentual_Strike_3', 'Valor_Strike_3', 'Percentual_Barreira_3', 'Valor_Barreira_3',
-                'Valor_Rebate_3', 'Tipo_Barreira_3', 'Quantidade_Ativa_4', 'Quantidade_Boleta_4', 'Tipo_4',
-                'Percentual_Strike_4', 'Valor_Strike_4', 'Percentual_Barreira_4', 'Valor_Barreira_4',
-                'Valor_Rebate_4', 'Tipo_Barreira_4', 'Quantidade', 'Investido', 'preco_atual', 'preco_fechamento',
-                'resultado', 'Ajuste', 'Status', 'Volume', 'Cupons_Premio', 'Percentual'
-            ]
-            df = df[[col for col in colunas_tabela if col in df.columns]]
-
             df = df.where(pd.notnull(df), None)
-
             df.to_sql('operacoes_estruturadas', con=engine, if_exists='append', index=False)
-
             st.success("Planilha importada e inserida no banco com sucesso.")
 
     try:
@@ -244,49 +194,4 @@ def render():
     except Exception:
         df_bd = pd.DataFrame(columns=[
             'Conta', 'Cliente', 'Assessor', 'Codigo_da_Operacao', 'Data_Registro', 'Ativo', 'Estrutura',
-            'preco_atual', 'preco_fechamento', 'resultado', 'Ajuste', 'Status', 'Volume', 'Cupons_Premio', 'Percentual'
-        ])
-
-    st.write("### Filtros para Consulta")
-    with st.form("form_filtros"):
-        filtro_conta = st.multiselect('Conta', options=df_bd['Conta'].dropna().unique())
-        filtro_cliente = st.multiselect('Cliente', options=df_bd['Cliente'].dropna().unique() if 'Cliente' in df_bd else [])
-        filtro_assessor = st.multiselect('Assessor', options=df_bd['Assessor'].dropna().unique() if 'Assessor' in df_bd else [])
-        filtro_ativo = st.multiselect('Ativo', options=df_bd['Ativo'].dropna().unique() if 'Ativo' in df_bd else [])
-        filtro_estrutura = st.multiselect('Estrutura', options=df_bd['Estrutura'].dropna().unique() if 'Estrutura' in df_bd else [])
-        aplicar = st.form_submit_button("Aplicar Filtros")
-
-    df_filtrado = df_bd.copy()
-    if aplicar:
-        if filtro_conta:
-            df_filtrado = df_filtrado[df_filtrado['Conta'].isin(filtro_conta)]
-        if filtro_cliente:
-            df_filtrado = df_filtrado[df_filtrado['Cliente'].isin(filtro_cliente)]
-        if filtro_assessor:
-            df_filtrado = df_filtrado[df_filtrado['Assessor'].isin(filtro_assessor)]
-        if filtro_ativo:
-            df_filtrado = df_filtrado[df_filtrado['Ativo'].isin(filtro_ativo)]
-        if filtro_estrutura:
-            df_filtrado = df_filtrado[df_filtrado['Estrutura'].isin(filtro_estrutura)]
-
-    colunas_para_exibir = [
-        'Conta', 'Cliente', 'Assessor', 'Codigo_da_Operacao', 'Data_Registro', 'Ativo', 'Estrutura',
-        'preco_atual', 'preco_fechamento', 'resultado', 'Ajuste', 'Status', 'Volume', 'Cupons_Premio', 'Percentual'
-    ]
-    colunas_existentes = [c for c in colunas_para_exibir if c in df_filtrado.columns]
-    st.dataframe(df_filtrado[colunas_existentes])
-
-    def rerun_app():
-        try:
-            st.rerun()
-        except AttributeError:
-            st.rerun()
-  
-
-
-    if st.button("Atualizar preços atuais"):
-        atualizar_preco_ativos(engine)
-
-    if st.button("Calcular Resultados"):
-        df_bd = calcular_resultados(engine, df_bd)
-        st.rerun()
+            'preco_at_
