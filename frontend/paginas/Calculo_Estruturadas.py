@@ -4,6 +4,8 @@ from backend.conexao import conectar
 from sqlalchemy import text
 from datetime import datetime
 import math
+import re
+import unicodedata
 
 # =========================
 # Utilitários
@@ -56,6 +58,26 @@ def safe_val(val):
         return None
     return val
 
+def norm_str(s):
+    if s is None:
+        return ''
+    s = str(s).strip()
+    s = ''.join(ch for ch in unicodedata.normalize('NFKD', s) if not unicodedata.combining(ch))
+    s = re.sub(r'\s+', ' ', s)
+    return s.upper()
+
+def obter_strike_call_vendida_por_flags(row):
+    for i in range(1, 5):
+        flag_col = f'opcao_call_vendida_{i}'
+        strike_col = f'strike_{i}'
+        if row.get(flag_col, 0) == 1:
+            k = row.get(strike_col, None)
+            if k is not None and not pd.isna(k):
+                return float(k)
+    # fallback
+    k1 = pd.to_numeric(row.get('Valor_Strike_1', 0), errors='coerce')
+    return 0.0 if (k1 is None or pd.isna(k1)) else float(k1)
+
 # =========================
 # Atualização de preços (JOIN)
 # =========================
@@ -79,7 +101,7 @@ def atualizar_preco_ativos(engine):
     st.success("Preços atualizados conforme a data de vencimento.")
 
 # =========================
-# Cálculo de resultados
+# Cálculo de resultados (apenas Estrutura == Financiamento)
 # =========================
 def calcular_resultados(engine, df):
     hoje = datetime.today().date()
@@ -87,8 +109,11 @@ def calcular_resultados(engine, df):
     atualizacoes = []
 
     for idx, row in df.iterrows():
-        estrutura_raw = row.get('Estrutura', '')
-        estrutura = str(estrutura_raw).strip().upper()
+        estrutura_norm = norm_str(row.get('Estrutura', ''))
+
+        # Exatamente "FINANCIAMENTO"
+        if estrutura_norm != 'FINANCIAMENTO':
+            continue
 
         vencimento_raw = row.get('Data_Vencimento')
         if pd.isna(vencimento_raw):
@@ -107,87 +132,61 @@ def calcular_resultados(engine, df):
         except Exception:
             continue
 
-        # Coerção de entradas numéricas
-        quantidade = pd.to_numeric(row.get('Quantidade', 0), errors='coerce')
-        valor_ativo = pd.to_numeric(row.get('Valor_Ativo', 0), errors='coerce')
-        custo_unit = pd.to_numeric(row.get('Custo_Unitario_Cliente', 0), errors='coerce')
-        strike_call_vendida = pd.to_numeric(row.get('Valor_Strike_1', 0), errors='coerce')
-        dividendos = pd.to_numeric(row.get('dividendos', 0), errors='coerce')
+        # Entradas numéricas
+        quantidade = pd.to_numeric(row.get('Quantidade', 0), errors='coerce') or 0.0
+        valor_ativo = pd.to_numeric(row.get('Valor_Ativo', 0), errors='coerce') or 0.0
+        custo_unit = pd.to_numeric(row.get('Custo_Unitario_Cliente', 0), errors='coerce') or 0.0
+        dividendos = pd.to_numeric(row.get('dividendos', 0), errors='coerce') or 0.0
+        strike_call_vendida = obter_strike_call_vendida_por_flags(row)
 
-        for name in ['quantidade','valor_ativo','custo_unit','strike_call_vendida','dividendos']:
-            if locals()[name] is None or pd.isna(locals()[name]):
-                locals()[name] = 0.0
+        quantidade = float(0 if pd.isna(quantidade) else quantidade)
+        valor_ativo = float(0 if pd.isna(valor_ativo) else valor_ativo)
+        custo_unit = float(0 if pd.isna(custo_unit) else custo_unit)
+        dividendos = float(0 if pd.isna(dividendos) else dividendos)
 
-        quantidade = float(quantidade)
-        valor_ativo = float(valor_ativo)
-        custo_unit = float(custo_unit)
-        strike_call_vendida = float(strike_call_vendida)
-        dividendos = float(dividendos)
-
-        # Campos calculados
         cupons_premio = quantidade * custo_unit if (quantidade and custo_unit) else 0.0
-        ajuste = None
-        resultado = None
-        status = None
 
-        # Apenas FINANCIAMENTO aplica a lógica
-        if 'FINANCIAMENTO' in estrutura:
-            if preco > strike_call_vendida:
-                # Exerce: há ajuste
-                ajuste = (strike_call_vendida - preco) * quantidade
-                resultado = (preco - valor_ativo + dividendos) * quantidade + ajuste + cupons_premio
-                status = "Ação Vendida"
-            else:
-                # Virou pó (<= strike)
-                ajuste = 0.0
-                resultado = cupons_premio
-                status = "Virando Pó" if vencimento > hoje else "Virou Pó"
+        if preco > strike_call_vendida:
+            ajuste = (strike_call_vendida - preco) * quantidade
+            resultado = (preco - valor_ativo + dividendos) * quantidade + ajuste + cupons_premio
+            status = "Ação Vendida"
+        else:
+            ajuste = 0.0
+            resultado = cupons_premio
+            status = "Virando Pó" if vencimento > hoje else "Virou Pó"
 
-        # Volume, investido, percentual (apenas se houver resultado calculado)
-        volume = quantidade * preco if (quantidade and preco) else None
+        volume = quantidade * preco if (quantidade and preco) else 0.0
         investido = pd.to_numeric(row.get('investido', quantidade * valor_ativo), errors='coerce')
-        investido = None if (investido is None or pd.isna(investido)) else float(investido)
-        percentual = (resultado / investido) if (resultado is not None and investido and investido != 0) else None
+        investido = 0.0 if (investido is None or pd.isna(investido)) else float(investido)
+        percentual = (resultado / investido) if investido else None
 
-        # Montar dicionário somente com campos a atualizar (evita sobrescrever com None indevido)
-        update_dict = {'id': row.get('id', None)}
-        if resultado is not None:
-            update_dict['resultado'] = safe_val(resultado)
-        if ajuste is not None:
-            update_dict['Ajuste'] = safe_val(ajuste)
-        if status is not None:
-            update_dict['Status'] = status
-        if volume is not None:
-            update_dict['Volume'] = safe_val(volume)
-        # Cupons_Premio só atualiza se for financiamento (mantém coerência com regra)
-        if 'FINANCIAMENTO' in estrutura:
-            update_dict['Cupons_Premio'] = safe_val(cupons_premio)
-        if percentual is not None:
-            update_dict['percentual'] = safe_val(percentual)
+        atualizacoes.append({
+            'id': row.get('id', None),
+            'resultado': safe_val(resultado),
+            'Ajuste': safe_val(ajuste),
+            'Status': status,
+            'Volume': safe_val(volume),
+            'Cupons_Premio': safe_val(cupons_premio),
+            'percentual': safe_val(percentual)
+        })
 
-        # Só inclui se houver id e ao menos um campo (além do id) para atualizar
-        if update_dict.get('id') is not None and len(update_dict.keys()) > 1:
-            atualizacoes.append(update_dict)
-
-    # Persistência: atualiza apenas campos presentes no dicionário
+    # Persistência
     with engine.begin() as conn:
         for a in atualizacoes:
-            sets = []
-            params = {}
-            for k, v in a.items():
-                if k == 'id':
-                    continue
-                sets.append(f"{k} = :{k}")
-                params[k] = v
-            params['id'] = a['id']
-            if sets:
-                sql = f"UPDATE operacoes_estruturadas SET {', '.join(sets)} WHERE id = :id"
-                conn.execute(text(sql), params)
+            if a['id'] is not None:
+                conn.execute(text("""
+                    UPDATE operacoes_estruturadas
+                    SET resultado = :resultado,
+                        Ajuste = :Ajuste,
+                        Status = :Status,
+                        Volume = :Volume,
+                        Cupons_Premio = :Cupons_Premio,
+                        percentual = :percentual
+                    WHERE id = :id
+                """), a)
 
     st.success(f"Foram atualizados {len(atualizacoes)} registros.")
     return df
-
-
 
 # =========================
 # UI
@@ -275,7 +274,7 @@ def render():
             }
             df = df.rename(columns=renomear)
 
-            # 4) Remover colunas que não existem no banco (ex.: Canal de Origem)
+            # 4) Remover colunas fora do schema
             colunas_validas = set([
                 'Conta','Cliente','Assessor','Codigo_da_Operacao','Data_Registro','Ativo','Estrutura','Valor_Ativo',
                 'Data_Vencimento','Custo_Unitario_Cliente','Comissao_Assessor',
@@ -287,7 +286,7 @@ def render():
             ])
             df = df[[c for c in df.columns if c in colunas_validas]].copy()
 
-            # 5) Tipos e quantidade
+            # 5) Coerção numérica e quantidade
             for c in ['Valor_Ativo','Custo_Unitario_Cliente','Comissao_Assessor',
                       'Percentual_Strike_1','Valor_Strike_1','Percentual_Barreira_1','Valor_Barreira_1','Valor_Rebate_1',
                       'Percentual_Strike_2','Valor_Strike_2','Percentual_Barreira_2','Valor_Barreira_2','Valor_Rebate_2',
