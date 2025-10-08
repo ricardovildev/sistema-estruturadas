@@ -97,12 +97,8 @@ def calcular_resultados(engine, df):
         except Exception:
             continue
 
-        preco = None
-        if vencimento > hoje:
-            preco = row.get('preco_atual', None)
-        else:
-            preco = row.get('preco_fechamento', None)
-
+        # Preço de referência conforme vencimento
+        preco = row.get('preco_atual') if vencimento > hoje else row.get('preco_fechamento')
         if preco in [None, ''] or pd.isna(preco):
             continue
         try:
@@ -110,6 +106,7 @@ def calcular_resultados(engine, df):
         except Exception:
             continue
 
+        # Coerção de entradas numéricas
         quantidade = pd.to_numeric(row.get('Quantidade', 0), errors='coerce')
         valor_ativo = pd.to_numeric(row.get('Valor_Ativo', 0), errors='coerce')
         custo_unit = pd.to_numeric(row.get('Custo_Unitario_Cliente', 0), errors='coerce')
@@ -126,25 +123,26 @@ def calcular_resultados(engine, df):
         strike_call_vendida = float(strike_call_vendida)
         dividendos = float(dividendos)
 
+        # Cupons, ajuste, resultado
         cupons_premio = quantidade * custo_unit if (quantidade and custo_unit) else 0.0
         ajuste = 0.0
         resultado = 0.0
-        status = "Ação Vendida"  # conforme regra
+        status = "Ação Vendida"
 
-        if estrutura == "FINANCIAMENTO" or "FINANCIAMENTO" in estrutura:
+        if 'FINANCIAMENTO' in estrutura:
             if preco > strike_call_vendida:
                 ajuste = (strike_call_vendida - preco) * quantidade
                 resultado = (preco - valor_ativo + dividendos) * quantidade + ajuste + cupons_premio
             else:
-                # virou pó
                 resultado = cupons_premio
                 ajuste = 0.0
         else:
-            # Base para outras estruturas (reutiliza lógica geral pedida)
+            # Base para outras estruturas (mesma base pedida)
             resultado = (preco - valor_ativo + dividendos) * quantidade + cupons_premio
 
         volume = quantidade * preco if (quantidade and preco) else 0.0
-        investido = quantidade * valor_ativo if (quantidade and valor_ativo) else 0.0
+        investido = pd.to_numeric(row.get('investido', quantidade * valor_ativo), errors='coerce')
+        investido = 0.0 if (investido is None or pd.isna(investido)) else float(investido)
         percentual = (resultado / investido) if investido else None
 
         atualizacoes.append({
@@ -157,6 +155,7 @@ def calcular_resultados(engine, df):
             'percentual': safe_val(percentual)
         })
 
+    # Persistência
     with engine.begin() as conn:
         for a in atualizacoes:
             if a['id'] is not None:
@@ -173,6 +172,7 @@ def calcular_resultados(engine, df):
 
     st.success(f"Foram atualizados {len(atualizacoes)} registros.")
     return df
+
 
 # =========================
 # UI
