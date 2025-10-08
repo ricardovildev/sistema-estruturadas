@@ -32,35 +32,29 @@ def tratar_quantidade(row):
     return 0
 
 def atualizar_preco_ativos(engine):
-    hoje = datetime.today().date()
-    df_ops = pd.read_sql("SELECT id, Ativo, Data_Vencimento FROM operacoes_estruturadas", con=engine)
-    df_precos_atuais = pd.read_sql("SELECT codigo_bdi, preco_atual FROM ativos_yahoo", con=engine)
-    df_precos_atuais['codigo_bdi'] = df_precos_atuais['codigo_bdi'].str.strip().str.upper()
-    df_precos_fech = pd.read_sql("SELECT codigo_bdi, preco_ultimo, data_pregao FROM historico_precos", con=engine)
-    df_precos_fech['codigo_bdi'] = df_precos_fech['codigo_bdi'].str.strip().str.upper()
-
     with engine.begin() as conn:
-        for idx, row in df_ops.iterrows():
-            ativo = str(row['Ativo']).strip().upper()
-            vencimento = pd.to_datetime(row['Data_Vencimento']).date()
-            if vencimento > hoje:
-                preco_row = df_precos_atuais[df_precos_atuais['codigo_bdi'] == ativo]
-                if not preco_row.empty:
-                    preco = preco_row['preco_atual'].iloc[0]
-                    conn.execute(text("""
-                        UPDATE operacoes_estruturadas SET preco_atual = :preco WHERE id = :id
-                    """), {'preco': preco, 'id': row['id']})
-            else:
-                preco_row = df_precos_fech[
-                    (df_precos_fech['codigo_bdi'] == ativo) & 
-                    (pd.to_datetime(df_precos_fech['data_pregao']).dt.date == vencimento)
-                ]
-                if not preco_row.empty:
-                    preco = preco_row['preco_ultimo'].iloc[0]
-                    conn.execute(text("""
-                        UPDATE operacoes_estruturadas SET preco_fechamento = :preco WHERE id = :id
-                    """), {'preco': preco, 'id': row['id']})
+        # Atualiza preço para vencimentos futuros com join na tabela ativos_yahoo
+        conn.execute(
+            text("""
+                UPDATE operacoes_estruturadas oe
+                JOIN ativos_yahoo ay ON UPPER(TRIM(oe.Ativo)) = UPPER(TRIM(ay.codigo_bdi))
+                SET oe.preco_atual = ay.preco_atual
+                WHERE oe.Data_Vencimento > CURDATE()
+            """)
+        )
+
+        # Atualiza preço de fechamento para vencimentos passados com join na tabela historico_precos
+        conn.execute(
+            text("""
+                UPDATE operacoes_estruturadas oe
+                JOIN historico_precos hp ON UPPER(TRIM(oe.Ativo)) = UPPER(TRIM(hp.codigo_bdi))
+                AND oe.Data_Vencimento = hp.data_pregao
+                SET oe.preco_fechamento = hp.preco_ultimo
+                WHERE oe.Data_Vencimento <= CURDATE();
+            """)
+        )
     st.success("Preços atualizados conforme a data de vencimento.")
+
 
 def calcular_resultados(engine, df):
     hoje = datetime.today().date()
