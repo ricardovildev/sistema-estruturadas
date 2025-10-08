@@ -278,14 +278,15 @@ def render():
 
     def rerun_app():
         try:
-            st.experimental_rerun()
+            st.rerun()
         except AttributeError:
-            from streamlit.runtime.scriptrunner import rerun
-            rerun()
+            st.rerun()
+  
+
 
     if st.button("Atualizar preços atuais"):
         atualizar_preco_ativos(engine)
 
     if st.button("Calcular Resultados"):
         df_bd = calcular_resultados(engine, df_bd)
-        rerun_app()
+        st.rerun()
