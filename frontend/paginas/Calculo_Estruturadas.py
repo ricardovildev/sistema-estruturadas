@@ -87,7 +87,8 @@ def calcular_resultados(engine, df):
     atualizacoes = []
 
     for idx, row in df.iterrows():
-        estrutura = str(row.get('Estrutura', '')).strip().upper()
+        estrutura_raw = row.get('Estrutura', '')
+        estrutura = str(estrutura_raw).strip().upper()
 
         vencimento_raw = row.get('Data_Vencimento')
         if pd.isna(vencimento_raw):
@@ -123,55 +124,69 @@ def calcular_resultados(engine, df):
         strike_call_vendida = float(strike_call_vendida)
         dividendos = float(dividendos)
 
-        # Cupons, ajuste, resultado
+        # Campos calculados
         cupons_premio = quantidade * custo_unit if (quantidade and custo_unit) else 0.0
-        ajuste = 0.0
-        resultado = 0.0
-        status = "Ação Vendida"
+        ajuste = None
+        resultado = None
+        status = None
 
+        # Apenas FINANCIAMENTO aplica a lógica
         if 'FINANCIAMENTO' in estrutura:
             if preco > strike_call_vendida:
+                # Exerce: há ajuste
                 ajuste = (strike_call_vendida - preco) * quantidade
                 resultado = (preco - valor_ativo + dividendos) * quantidade + ajuste + cupons_premio
+                status = "Ação Vendida"
             else:
-                resultado = cupons_premio
+                # Virou pó (<= strike)
                 ajuste = 0.0
-        else:
-            # Base para outras estruturas (mesma base pedida)
-            resultado = (preco - valor_ativo + dividendos) * quantidade + cupons_premio
+                resultado = cupons_premio
+                status = "Virando Pó" if vencimento > hoje else "Virou Pó"
 
-        volume = quantidade * preco if (quantidade and preco) else 0.0
+        # Volume, investido, percentual (apenas se houver resultado calculado)
+        volume = quantidade * preco if (quantidade and preco) else None
         investido = pd.to_numeric(row.get('investido', quantidade * valor_ativo), errors='coerce')
-        investido = 0.0 if (investido is None or pd.isna(investido)) else float(investido)
-        percentual = (resultado / investido) if investido else None
+        investido = None if (investido is None or pd.isna(investido)) else float(investido)
+        percentual = (resultado / investido) if (resultado is not None and investido and investido != 0) else None
 
-        atualizacoes.append({
-            'id': row.get('id', None),
-            'resultado': safe_val(resultado),
-            'Ajuste': safe_val(ajuste),
-            'Status': status,
-            'Volume': safe_val(volume),
-            'Cupons_Premio': safe_val(cupons_premio),
-            'percentual': safe_val(percentual)
-        })
+        # Montar dicionário somente com campos a atualizar (evita sobrescrever com None indevido)
+        update_dict = {'id': row.get('id', None)}
+        if resultado is not None:
+            update_dict['resultado'] = safe_val(resultado)
+        if ajuste is not None:
+            update_dict['Ajuste'] = safe_val(ajuste)
+        if status is not None:
+            update_dict['Status'] = status
+        if volume is not None:
+            update_dict['Volume'] = safe_val(volume)
+        # Cupons_Premio só atualiza se for financiamento (mantém coerência com regra)
+        if 'FINANCIAMENTO' in estrutura:
+            update_dict['Cupons_Premio'] = safe_val(cupons_premio)
+        if percentual is not None:
+            update_dict['percentual'] = safe_val(percentual)
 
-    # Persistência
+        # Só inclui se houver id e ao menos um campo (além do id) para atualizar
+        if update_dict.get('id') is not None and len(update_dict.keys()) > 1:
+            atualizacoes.append(update_dict)
+
+    # Persistência: atualiza apenas campos presentes no dicionário
     with engine.begin() as conn:
         for a in atualizacoes:
-            if a['id'] is not None:
-                conn.execute(text("""
-                    UPDATE operacoes_estruturadas
-                    SET resultado = :resultado,
-                        Ajuste = :Ajuste,
-                        Status = :Status,
-                        Volume = :Volume,
-                        Cupons_Premio = :Cupons_Premio,
-                        percentual = :percentual
-                    WHERE id = :id
-                """), a)
+            sets = []
+            params = {}
+            for k, v in a.items():
+                if k == 'id':
+                    continue
+                sets.append(f"{k} = :{k}")
+                params[k] = v
+            params['id'] = a['id']
+            if sets:
+                sql = f"UPDATE operacoes_estruturadas SET {', '.join(sets)} WHERE id = :id"
+                conn.execute(text(sql), params)
 
     st.success(f"Foram atualizados {len(atualizacoes)} registros.")
     return df
+
 
 
 # =========================
