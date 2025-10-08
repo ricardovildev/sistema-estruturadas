@@ -3,6 +3,7 @@ import pandas as pd
 from backend.conexao import conectar
 from sqlalchemy import text
 from datetime import datetime
+import math
 
 def converter_virgula_para_float(df, colunas):
     for col in colunas:
@@ -57,6 +58,11 @@ def atualizar_preco_ativos(engine):
 
 
 
+def safe_val(val):
+    if isinstance(val, float) and (math.isnan(val) or val == float('nan')):
+        return None
+    return val
+
 def calcular_resultados(engine, df):
     hoje = datetime.today().date()
     df = df.copy()
@@ -66,16 +72,14 @@ def calcular_resultados(engine, df):
         estrutura = str(row.get('Estrutura', '')).strip().upper()
         vencimento_raw = row.get('Data_Vencimento')
         if pd.isna(vencimento_raw):
-            continue  # pula registro com data vencimento inválida/nula
+            continue
 
         vencimento = pd.to_datetime(vencimento_raw).date()
-
         preco = None
         if vencimento > hoje:
             preco = row.get('preco_atual', None)
         else:
             preco = row.get('preco_fechamento', None)
-
         if preco in [None, ''] or pd.isna(preco):
             continue
 
@@ -107,13 +111,13 @@ def calcular_resultados(engine, df):
         percentual = resultado / investido if investido else 0
 
         atualizacoes.append({
-            'id': row.get('id', None),
-            'resultado': resultado,
-            'Ajuste': ajuste,
+            'id': safe_val(row.get('id', None)),
+            'resultado': safe_val(resultado),
+            'Ajuste': safe_val(ajuste),
             'Status': status,
-            'Volume': volume,
-            'Cupons_Premio': cupons_premio,
-            'Percentual': percentual
+            'Volume': safe_val(volume),
+            'Cupons_Premio': safe_val(cupons_premio),
+            'Percentual': safe_val(percentual)
         })
 
     with engine.begin() as conn:
@@ -126,6 +130,7 @@ def calcular_resultados(engine, df):
                 """), a)
     st.success(f"Foram atualizados {len(atualizacoes)} registros.")
     return df
+
 
 def render():
     st.title("Cálculo de Resultados das Operações Estruturadas")
