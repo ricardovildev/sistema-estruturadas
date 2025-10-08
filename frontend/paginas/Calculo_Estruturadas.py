@@ -169,7 +169,7 @@ def calcular_resultados(engine, df):
             })
 
         # 2) Financiamento sob custódia (exatamente)
-        elif estrutura_norm == 'FINANCIAMENTO SOB CUSTODIA':
+        elif estrutura_norm == 'FINANCIAMENTO SOB CUSTÓDIA':
             strike_call_vendida = obter_strike_call_vendida_por_flags(row)
             cupons_premio = quantidade * custo_unit if (quantidade and custo_unit) else 0.0
 
