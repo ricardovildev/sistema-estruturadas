@@ -70,7 +70,7 @@ def calcular_resultados(engine, df):
             preco = row.get('preco_atual', None)
         else:
             preco = row.get('preco_fechamento', None)
-        if preco in [None, '', pd.NA] or pd.isna(preco):
+        if preco in [None, ''] or pd.isna(preco):
             continue
 
         quantidade = float(row.get('Quantidade', 0))
