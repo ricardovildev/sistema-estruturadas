@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from backend.conexao import conectar
 from sqlalchemy import text
+from datetime import datetime
 
 def converter_virgula_para_float(df, colunas):
     for col in colunas:
@@ -31,71 +32,95 @@ def tratar_quantidade(row):
     return 0
 
 def atualizar_preco_ativos(engine):
+    hoje = datetime.today().date()
+    df_ops = pd.read_sql("SELECT id, Ativo, Data_Vencimento FROM operacoes_estruturadas", con=engine)
+    df_precos_atuais = pd.read_sql("SELECT codigo_bdi, preco_atual FROM ativos_yahoo", con=engine)
+    df_precos_atuais['codigo_bdi'] = df_precos_atuais['codigo_bdi'].str.strip().str.upper()
+    df_precos_fech = pd.read_sql("SELECT codigo_bdi, preco_ultimo, data_pregao FROM historico_precos", con=engine)
+    df_precos_fech['codigo_bdi'] = df_precos_fech['codigo_bdi'].str.strip().str.upper()
+
     with engine.begin() as conn:
-        conn.execute(text("UPDATE ativos_yahoo SET preco_atual = preco_atual"))
-    st.success("Preços atualizados com sucesso.")
+        for idx, row in df_ops.iterrows():
+            ativo = str(row['Ativo']).strip().upper()
+            vencimento = pd.to_datetime(row['Data_Vencimento']).date()
+            if vencimento > hoje:
+                preco_row = df_precos_atuais[df_precos_atuais['codigo_bdi'] == ativo]
+                if not preco_row.empty:
+                    preco = preco_row['preco_atual'].iloc[0]
+                    conn.execute(text("""
+                        UPDATE operacoes_estruturadas SET preco_atual = :preco WHERE id = :id
+                    """), {'preco': preco, 'id': row['id']})
+            else:
+                preco_row = df_precos_fech[
+                    (df_precos_fech['codigo_bdi'] == ativo) & 
+                    (pd.to_datetime(df_precos_fech['data_pregao']).date() == vencimento)
+                ]
+                if not preco_row.empty:
+                    preco = preco_row['preco_ultimo'].iloc[0]
+                    conn.execute(text("""
+                        UPDATE operacoes_estruturadas SET preco_fechamento = :preco WHERE id = :id
+                    """), {'preco': preco, 'id': row['id']})
+    st.success("Preços atualizados conforme a data de vencimento.")
 
 def calcular_resultados(engine, df):
-    df_precos = pd.read_sql(text("SELECT codigo_bdi, preco_ultimo, data_pregao FROM historico_precos"), engine)
-    df_precos['codigo_bdi'] = df_precos['codigo_bdi'].str.strip().str.upper()
+    hoje = datetime.today().date()
     df = df.copy()
-    for col in ['preco_ultimo', 'resultado']:
-        if col not in df.columns:
-            df[col] = pd.NA
-
     atualizacoes = []
 
     for idx, row in df.iterrows():
-        if pd.notna(row.get('preco_ultimo')) and pd.notna(row.get('resultado')):
+        estrutura = str(row.get('Estrutura', '')).strip().upper()
+        vencimento = pd.to_datetime(row['Data_Vencimento']).date()
+        preco = None
+        if vencimento > hoje:
+            preco = row.get('preco_atual', None)
+        else:
+            preco = row.get('preco_fechamento', None)
+        if preco in [None, '', pd.NA] or pd.isna(preco):
             continue
 
-        ativo = str(row['Ativo']).strip().upper()
-        vencimento = row['Data_Vencimento']
-        st.write(f"Processando Ativo: {ativo}, Vencimento: {vencimento}")
+        quantidade = row.get('Quantidade', 0)
+        valor_ativo = row.get('Valor_Ativo', 0)
+        custo_unit = row.get('Custo_Unitario_Cliente', 0)
+        strike_call_vendida = row.get('Valor_Strike_1', 0)
+        dividendos = row.get('Dividendos', 0) if row.get('Dividendos', 0) not in [None, ''] else 0
 
-        precos_ativos = df_precos[
-            (df_precos['codigo_bdi'] == ativo) &
-            (pd.to_datetime(df_precos['data_pregao']) == pd.to_datetime(vencimento))
-        ]
-
-        st.write(f"Preços encontrados: {len(precos_ativos)}")
-
-        if not precos_ativos.empty:
-            preco_ult = precos_ativos['preco_ultimo'].iloc[0]
-            df.at[idx, 'preco_ultimo'] = preco_ult
-
-            strike = row.get('Valor_Strike_1', 0)
-            qtd = row.get('Quantidade_Ativa_1', 0)
-            custo_unit = row.get('Custo_Unitario_Cliente', 0)
-            preco_atual = preco_ult
-
-            ajuste = 0
-            resultado = 0
-            if preco_atual > strike and qtd < 0:
-                ajuste = (strike - preco_atual) * qtd
-                resultado = preco_atual * abs(qtd) + ajuste + custo_unit * abs(qtd)
+        cupons_premio = quantidade * custo_unit if (quantidade and custo_unit) else 0
+        ajuste = 0
+        resultado = 0
+        status = ""
+        if estrutura == "FINANCIAMENTO":
+            if preco > strike_call_vendida:
+                ajuste = (strike_call_vendida - preco) * quantidade
+                resultado = (preco - valor_ativo + dividendos) * quantidade + ajuste + cupons_premio
+                status = "Ação Vendida"
             else:
-                resultado = custo_unit * abs(qtd)
+                resultado = cupons_premio
+                ajuste = 0
+                status = "Ação Vendida"
+        else:
+            resultado = cupons_premio
 
-            df.at[idx, 'resultado'] = resultado
-
-            atualizacoes.append({
-                'id': row.get('id', None),
-                'preco_ultimo': preco_ult,
-                'resultado': resultado,
-            })
-
-    st.write(f"Total atualizações: {len(atualizacoes)}")
+        volume = quantidade * preco if (quantidade and preco) else 0
+        investido = quantidade * valor_ativo if (quantidade and valor_ativo) else 0
+        percentual = resultado / investido if investido else 0
+        atualizacoes.append({
+            'id': row.get('id', None),
+            'resultado': resultado,
+            'ajuste': ajuste,
+            'status': status,
+            'volume': volume,
+            'cupons_premio': cupons_premio,
+            'percentual': percentual
+        })
 
     with engine.begin() as conn:
-        for atualizacao in atualizacoes:
-            if atualizacao['id'] is not None:
+        for a in atualizacoes:
+            if a['id'] is not None:
                 conn.execute(text("""
                     UPDATE operacoes_estruturadas
-                    SET preco_ultimo = :preco, resultado = :resultado
+                    SET resultado = :resultado, Ajuste = :ajuste, Status = :status, Volume = :volume, Cupons_Premio = :cupons_premio, Percentual = :percentual
                     WHERE id = :id
-                """), {'preco': atualizacao['preco_ultimo'], 'resultado': atualizacao['resultado'], 'id': atualizacao['id']})
-
+                """), a)
     st.success(f"Foram atualizados {len(atualizacoes)} registros.")
     return df
 
@@ -110,7 +135,6 @@ def render():
     if arquivo:
         if st.button("Importar Planilha"):
             df = pd.read_excel(arquivo, dtype=str)
-
             colunas_numericas = [
                 'Valor Ativo', 'Custo Unitário Cliente', 'Comissão Assessor',
                 'Quantidade Ativa (1)', 'Quantidade Boleta (1)', '% do Strike (1)', 'Valor do Strike (1)',
@@ -122,17 +146,12 @@ def render():
                 'Quantidade Ativa (4)', 'Quantidade Boleta (4)', '% do Strike (4)', 'Valor do Strike (4)',
                 '% da Barreira (4)', 'Valor da Barreira (4)', 'Valor do Rebate (4)'
             ]
-
             df = converter_virgula_para_float(df, colunas_numericas)
-
             df['Data Registro'] = pd.to_datetime(df['Data Registro'], dayfirst=True, errors='coerce')
             df['Data Vencimento'] = pd.to_datetime(df['Data Vencimento'], dayfirst=True, errors='coerce')
-
             df['Quantidade'] = df.apply(tratar_quantidade, axis=1)
-
             for i in range(1, 5):
                 df = identificar_opcao(df, i)
-
             renomear_colunas = {
                 'Código do Cliente': 'Conta',
                 'Código do Assessor': 'Assessor',
@@ -180,10 +199,11 @@ def render():
                 'Tipo da Barreira (4)': 'Tipo_Barreira_4',
             }
             df = df.rename(columns=renomear_colunas)
-
             if 'preco_atual' not in df.columns:
                 df['preco_atual'] = None
-
+            if 'preco_fechamento' not in df.columns:
+                df['preco_fechamento'] = None
+            df['Investido'] = df['Quantidade'] * df['Valor_Ativo']
             colunas_tabela = [
                 'Conta', 'Cliente', 'Assessor', 'Codigo_da_Operacao', 'Data_Registro',
                 'Ativo', 'Estrutura', 'Valor_Ativo', 'Data_Vencimento', 'Custo_Unitario_Cliente',
@@ -195,16 +215,12 @@ def render():
                 'Percentual_Strike_3', 'Valor_Strike_3', 'Percentual_Barreira_3', 'Valor_Barreira_3',
                 'Valor_Rebate_3', 'Tipo_Barreira_3', 'Quantidade_Ativa_4', 'Quantidade_Boleta_4', 'Tipo_4',
                 'Percentual_Strike_4', 'Valor_Strike_4', 'Percentual_Barreira_4', 'Valor_Barreira_4',
-                'Valor_Rebate_4', 'Tipo_Barreira_4', 'Quantidade', 'preco_atual', 'preco_ultimo',
-                'resultado', 'Ajuste', 'Status', 'Volume', 'Cupons_Premio'
+                'Valor_Rebate_4', 'Tipo_Barreira_4', 'Quantidade', 'Investido', 'preco_atual', 'preco_fechamento',
+                'resultado', 'Ajuste', 'Status', 'Volume', 'Cupons_Premio', 'Percentual'
             ]
-
             df = df[[col for col in colunas_tabela if col in df.columns]]
-
             df = df.where(pd.notnull(df), None)
-
             df.to_sql('operacoes_estruturadas', con=engine, if_exists='append', index=False)
-
             st.success("Planilha importada e inserida no banco com sucesso.")
 
     try:
@@ -212,7 +228,7 @@ def render():
     except Exception:
         df_bd = pd.DataFrame(columns=[
             'Conta', 'Cliente', 'Assessor', 'Codigo_da_Operacao', 'Data_Registro', 'Ativo', 'Estrutura',
-            'preco_atual', 'preco_ultimo', 'resultado', 'Ajuste', 'Status', 'Volume', 'Cupons_Premio'
+            'preco_atual', 'preco_fechamento', 'resultado', 'Ajuste', 'Status', 'Volume', 'Cupons_Premio', 'Percentual'
         ])
 
     st.write("### Filtros para Consulta")
@@ -239,10 +255,9 @@ def render():
 
     colunas_para_exibir = [
         'Conta', 'Cliente', 'Assessor', 'Codigo_da_Operacao', 'Data_Registro', 'Ativo', 'Estrutura',
-        'preco_atual', 'preco_ultimo', 'resultado', 'Ajuste', 'Status', 'Volume', 'Cupons_Premio'
+        'preco_atual', 'preco_fechamento', 'resultado', 'Ajuste', 'Status', 'Volume', 'Cupons_Premio', 'Percentual'
     ]
     colunas_existentes = [c for c in colunas_para_exibir if c in df_filtrado.columns]
-
     st.dataframe(df_filtrado[colunas_existentes])
 
     if st.button("Atualizar preços atuais"):
