@@ -33,11 +33,11 @@ def tratar_quantidade(row):
 
 def atualizar_preco_ativos(engine):
     with engine.begin() as conn:
-        # Atualiza preço para vencimentos futuros com join na tabela ativos_yahoo
+        # Atualiza preço para vencimentos futuros com join na tabela ativos_yahoo (ajustado para coluna asset_original)
         conn.execute(
             text("""
                 UPDATE operacoes_estruturadas oe
-                JOIN ativos_yahoo ay ON UPPER(TRIM(oe.Ativo)) = UPPER(TRIM(ay.codigo_bdi))
+                JOIN ativos_yahoo ay ON UPPER(TRIM(oe.Ativo)) = UPPER(TRIM(ay.asset_original))
                 SET oe.preco_atual = ay.preco_atual
                 WHERE oe.Data_Vencimento > CURDATE()
             """)
@@ -50,10 +50,11 @@ def atualizar_preco_ativos(engine):
                 JOIN historico_precos hp ON UPPER(TRIM(oe.Ativo)) = UPPER(TRIM(hp.codigo_bdi))
                 AND oe.Data_Vencimento = hp.data_pregao
                 SET oe.preco_fechamento = hp.preco_ultimo
-                WHERE oe.Data_Vencimento <= CURDATE();
+                WHERE oe.Data_Vencimento <= CURDATE()
             """)
         )
     st.success("Preços atualizados conforme a data de vencimento.")
+
 
 
 def calcular_resultados(engine, df):
