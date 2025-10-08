@@ -22,13 +22,13 @@ def identificar_opcao(df, seq=1):
 
 def tratar_quantidade(row):
     if row['Quantidade Ativa (1)'] != 0:
-        return abs(row['Quantidade Ativa (1)'])
+        return abs(float(row['Quantidade Ativa (1)']))
     for i in range(1, 5):
         qt_col = f'Quantidade Ativa ({i})'
         tipo_col = f'Tipo ({i})'
         if qt_col in row and tipo_col in row:
-            if row[qt_col] > 0 and str(row[tipo_col]).strip().lower() == 'stock':
-                return abs(row[qt_col])
+            if float(row[qt_col]) > 0 and str(row[tipo_col]).strip().lower() == 'stock':
+                return abs(float(row[qt_col]))
     return 0
 
 def atualizar_preco_ativos(engine):
@@ -53,7 +53,7 @@ def atualizar_preco_ativos(engine):
             else:
                 preco_row = df_precos_fech[
                     (df_precos_fech['codigo_bdi'] == ativo) & 
-                    (pd.to_datetime(df_precos_fech['data_pregao']).date() == vencimento)
+                    (pd.to_datetime(df_precos_fech['data_pregao']).dt.date == vencimento)
                 ]
                 if not preco_row.empty:
                     preco = preco_row['preco_ultimo'].iloc[0]
@@ -78,11 +78,11 @@ def calcular_resultados(engine, df):
         if preco in [None, '', pd.NA] or pd.isna(preco):
             continue
 
-        quantidade = row.get('Quantidade', 0)
-        valor_ativo = row.get('Valor_Ativo', 0)
-        custo_unit = row.get('Custo_Unitario_Cliente', 0)
-        strike_call_vendida = row.get('Valor_Strike_1', 0)
-        dividendos = row.get('Dividendos', 0) if row.get('Dividendos', 0) not in [None, ''] else 0
+        quantidade = float(row.get('Quantidade', 0))
+        valor_ativo = float(row.get('Valor_Ativo', 0))
+        custo_unit = float(row.get('Custo_Unitario_Cliente', 0))
+        strike_call_vendida = float(row.get('Valor_Strike_1', 0))
+        dividendos = float(row.get('Dividendos', 0) if row.get('Dividendos', 0) not in [None, ''] else 0)
 
         cupons_premio = quantidade * custo_unit if (quantidade and custo_unit) else 0
         ajuste = 0
@@ -106,11 +106,11 @@ def calcular_resultados(engine, df):
         atualizacoes.append({
             'id': row.get('id', None),
             'resultado': resultado,
-            'ajuste': ajuste,
-            'status': status,
-            'volume': volume,
-            'cupons_premio': cupons_premio,
-            'percentual': percentual
+            'Ajuste': ajuste,
+            'Status': status,
+            'Volume': volume,
+            'Cupons_Premio': cupons_premio,
+            'Percentual': percentual
         })
 
     with engine.begin() as conn:
@@ -118,7 +118,7 @@ def calcular_resultados(engine, df):
             if a['id'] is not None:
                 conn.execute(text("""
                     UPDATE operacoes_estruturadas
-                    SET resultado = :resultado, Ajuste = :ajuste, Status = :status, Volume = :volume, Cupons_Premio = :cupons_premio, Percentual = :percentual
+                    SET resultado = :resultado, Ajuste = :Ajuste, Status = :Status, Volume = :Volume, Cupons_Premio = :Cupons_Premio, Percentual = :Percentual
                     WHERE id = :id
                 """), a)
     st.success(f"Foram atualizados {len(atualizacoes)} registros.")
@@ -149,9 +149,12 @@ def render():
             df = converter_virgula_para_float(df, colunas_numericas)
             df['Data Registro'] = pd.to_datetime(df['Data Registro'], dayfirst=True, errors='coerce')
             df['Data Vencimento'] = pd.to_datetime(df['Data Vencimento'], dayfirst=True, errors='coerce')
+
             df['Quantidade'] = df.apply(tratar_quantidade, axis=1)
+
             for i in range(1, 5):
                 df = identificar_opcao(df, i)
+
             renomear_colunas = {
                 'Código do Cliente': 'Conta',
                 'Código do Assessor': 'Assessor',
@@ -199,11 +202,17 @@ def render():
                 'Tipo da Barreira (4)': 'Tipo_Barreira_4',
             }
             df = df.rename(columns=renomear_colunas)
+
+            # Conversão segura para numérico das colunas importadas
+            df['Quantidade'] = pd.to_numeric(df['Quantidade'], errors='coerce').fillna(0)
+            df['Valor_Ativo'] = pd.to_numeric(df['Valor_Ativo'], errors='coerce').fillna(0)
+            df['Investido'] = df['Quantidade'] * df['Valor_Ativo']
+
             if 'preco_atual' not in df.columns:
                 df['preco_atual'] = None
             if 'preco_fechamento' not in df.columns:
                 df['preco_fechamento'] = None
-            df['Investido'] = df['Quantidade'] * df['Valor_Ativo']
+
             colunas_tabela = [
                 'Conta', 'Cliente', 'Assessor', 'Codigo_da_Operacao', 'Data_Registro',
                 'Ativo', 'Estrutura', 'Valor_Ativo', 'Data_Vencimento', 'Custo_Unitario_Cliente',
@@ -219,8 +228,11 @@ def render():
                 'resultado', 'Ajuste', 'Status', 'Volume', 'Cupons_Premio', 'Percentual'
             ]
             df = df[[col for col in colunas_tabela if col in df.columns]]
+
             df = df.where(pd.notnull(df), None)
+
             df.to_sql('operacoes_estruturadas', con=engine, if_exists='append', index=False)
+
             st.success("Planilha importada e inserida no banco com sucesso.")
 
     try:
