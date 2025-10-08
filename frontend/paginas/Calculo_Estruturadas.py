@@ -32,9 +32,14 @@ def tratar_quantidade(row):
                 return abs(float(row[qt_col]))
     return 0
 
+def safe_val(val):
+    if isinstance(val, float) and (math.isnan(val) or val == float('nan')):
+        return None
+    return val
+
 def atualizar_preco_ativos(engine):
     with engine.begin() as conn:
-        # Atualiza preço para vencimentos futuros com join na tabela ativos_yahoo (ajustado para coluna asset_original)
+        # Atualiza preço para vencimentos futuros com join na tabela ativos_yahoo (coluna corrigida para asset_original)
         conn.execute(
             text("""
                 UPDATE operacoes_estruturadas oe
@@ -56,13 +61,6 @@ def atualizar_preco_ativos(engine):
         )
     st.success("Preços atualizados conforme a data de vencimento.")
 
-
-
-def safe_val(val):
-    if isinstance(val, float) and (math.isnan(val) or val == float('nan')):
-        return None
-    return val
-
 def calcular_resultados(engine, df):
     hoje = datetime.today().date()
     df = df.copy()
@@ -73,8 +71,8 @@ def calcular_resultados(engine, df):
         vencimento_raw = row.get('Data_Vencimento')
         if pd.isna(vencimento_raw):
             continue
-
         vencimento = pd.to_datetime(vencimento_raw).date()
+
         preco = None
         if vencimento > hoje:
             preco = row.get('preco_atual', None)
@@ -130,7 +128,6 @@ def calcular_resultados(engine, df):
                 """), a)
     st.success(f"Foram atualizados {len(atualizacoes)} registros.")
     return df
-
 
 def render():
     st.title("Cálculo de Resultados das Operações Estruturadas")
@@ -211,7 +208,6 @@ def render():
             }
             df = df.rename(columns=renomear_colunas)
 
-            # Conversão segura para numérico das colunas importadas
             df['Quantidade'] = pd.to_numeric(df['Quantidade'], errors='coerce').fillna(0)
             df['Valor_Ativo'] = pd.to_numeric(df['Valor_Ativo'], errors='coerce').fillna(0)
             df['Investido'] = df['Quantidade'] * df['Valor_Ativo']
@@ -280,9 +276,16 @@ def render():
     colunas_existentes = [c for c in colunas_para_exibir if c in df_filtrado.columns]
     st.dataframe(df_filtrado[colunas_existentes])
 
+    def rerun_app():
+        try:
+            st.experimental_rerun()
+        except AttributeError:
+            from streamlit.runtime.scriptrunner import rerun
+            rerun()
+
     if st.button("Atualizar preços atuais"):
         atualizar_preco_ativos(engine)
 
     if st.button("Calcular Resultados"):
         df_bd = calcular_resultados(engine, df_bd)
-        st.experimental_rerun()
+        rerun_app()
