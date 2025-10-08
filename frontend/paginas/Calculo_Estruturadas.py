@@ -64,12 +64,18 @@ def calcular_resultados(engine, df):
 
     for idx, row in df.iterrows():
         estrutura = str(row.get('Estrutura', '')).strip().upper()
-        vencimento = pd.to_datetime(row['Data_Vencimento']).date()
+        vencimento_raw = row.get('Data_Vencimento')
+        if pd.isna(vencimento_raw):
+            continue  # pula registro com data vencimento inválida/nula
+
+        vencimento = pd.to_datetime(vencimento_raw).date()
+
         preco = None
         if vencimento > hoje:
             preco = row.get('preco_atual', None)
         else:
             preco = row.get('preco_fechamento', None)
+
         if preco in [None, ''] or pd.isna(preco):
             continue
 
@@ -83,6 +89,7 @@ def calcular_resultados(engine, df):
         ajuste = 0
         resultado = 0
         status = ""
+
         if estrutura == "FINANCIAMENTO":
             if preco > strike_call_vendida:
                 ajuste = (strike_call_vendida - preco) * quantidade
@@ -98,6 +105,7 @@ def calcular_resultados(engine, df):
         volume = quantidade * preco if (quantidade and preco) else 0
         investido = quantidade * valor_ativo if (quantidade and valor_ativo) else 0
         percentual = resultado / investido if investido else 0
+
         atualizacoes.append({
             'id': row.get('id', None),
             'resultado': resultado,
