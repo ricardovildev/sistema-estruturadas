@@ -425,7 +425,7 @@ def render():
             df_filtrado = df_filtrado[df_filtrado['Estrutura'].isin(filtro_estrutura)]
 
     colunas_para_exibir = [
-        'Conta','Cliente','Assessor','Codigo_da_Operacao','Data_Registro','Ativo','Estrutura', 'Valor Ativo', 'Data Vencimento',
+        'Conta','Cliente','Assessor','Codigo_da_Operacao','Data_Registro','Ativo','Estrutura', 'Valor_Ativo', 'Data_Vencimento',
         'preco_atual','preco_fechamento','resultado','Ajuste','Status','Volume','Cupons_Premio','percentual','dividendos','investido'
     ]
     colunas_existentes = [c for c in colunas_para_exibir if c in df_filtrado.columns]
