@@ -194,4 +194,49 @@ def render():
     except Exception:
         df_bd = pd.DataFrame(columns=[
             'Conta', 'Cliente', 'Assessor', 'Codigo_da_Operacao', 'Data_Registro', 'Ativo', 'Estrutura',
-            'preco_at_
+            'preco_atual', 'preco_fechamento', 'resultado', 'Ajuste', 'Status', 'Volume', 'Cupons_Premio', 'Percentual'
+        ])
+
+    st.write("### Filtros para Consulta")
+    with st.form("form_filtros"):
+        filtro_conta = st.multiselect('Conta', options=df_bd['Conta'].dropna().unique())
+        filtro_cliente = st.multiselect('Cliente', options=df_bd['Cliente'].dropna().unique() if 'Cliente' in df_bd else [])
+        filtro_assessor = st.multiselect('Assessor', options=df_bd['Assessor'].dropna().unique() if 'Assessor' in df_bd else [])
+        filtro_ativo = st.multiselect('Ativo', options=df_bd['Ativo'].dropna().unique() if 'Ativo' in df_bd else [])
+        filtro_estrutura = st.multiselect('Estrutura', options=df_bd['Estrutura'].dropna().unique() if 'Estrutura' in df_bd else [])
+        aplicar = st.form_submit_button("Aplicar Filtros")
+
+    df_filtrado = df_bd.copy()
+    if aplicar:
+        if filtro_conta:
+            df_filtrado = df_filtrado[df_filtrado['Conta'].isin(filtro_conta)]
+        if filtro_cliente:
+            df_filtrado = df_filtrado[df_filtrado['Cliente'].isin(filtro_cliente)]
+        if filtro_assessor:
+            df_filtrado = df_filtrado[df_filtrado['Assessor'].isin(filtro_assessor)]
+        if filtro_ativo:
+            df_filtrado = df_filtrado[df_filtrado['Ativo'].isin(filtro_ativo)]
+        if filtro_estrutura:
+            df_filtrado = df_filtrado[df_filtrado['Estrutura'].isin(filtro_estrutura)]
+
+    colunas_para_exibir = [
+        'Conta', 'Cliente', 'Assessor', 'Codigo_da_Operacao', 'Data_Registro', 'Ativo', 'Estrutura',
+        'preco_atual', 'preco_fechamento', 'resultado', 'Ajuste', 'Status', 'Volume', 'Cupons_Premio', 'Percentual'
+    ]
+    colunas_existentes = [c for c in colunas_para_exibir if c in df_filtrado.columns]
+    st.dataframe(df_filtrado[colunas_existentes])
+
+    # ✅ Versão compatível do rerun
+    def rerun_app():
+        try:
+            st.rerun()
+        except Exception:
+            st.warning("Não foi possível recarregar automaticamente. Atualize a página manualmente.")
+
+    if st.button("Atualizar preços atuais"):
+        atualizar_preco_ativos(engine)
+        rerun_app()
+
+    if st.button("Calcular Resultados"):
+        df_bd = calcular_resultados(engine, df_bd)
+        rerun_app()
